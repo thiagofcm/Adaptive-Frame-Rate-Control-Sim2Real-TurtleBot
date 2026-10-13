@@ -2,13 +2,13 @@
 #                           GENERAL SETTINGS                            #
 # ===================================================================== #
 
-ENABLE_BACKWARD          = False    # Enable backward movement of the robot
+ENABLE_BACKWARD          = True    # Enable backward movement of the robot
 ENABLE_STACKING          = False    # Enable processing multiple consecutive scan frames at every observation step
 ENABLE_VISUAL = False    # Meant to be used only during evaluation/testing phase
 ENABLE_TRUE_RANDOM_GOALS = False    # If false, goals are selected semi-randomly from a list of known valid goal positions
 ENABLE_DYNAMIC_GOALS     = False    # If true, goal difficulty (distance) is adapted according to current success rate
 MODEL_STORE_INTERVAL     = 100      # Store the model weights every N episodes
-GRAPH_DRAW_INTERVAL      = 10       # Draw the graph every N episodes (drawing too often will slow down training)
+GRAPH_DRAW_INTERVAL      = 10       # Draw0 the graph every N episodes (drawing too often will slow down training)
 GRAPH_AVERAGE_REWARD     = 10       # Average the reward graph over every N episodes
 
 
@@ -39,7 +39,7 @@ MAX_NUMBER_OBSTACLES        = 6
 ENABLE_MOTOR_NOISE          = False # Add normally distributed noise to motor output to simulate hardware imperfections
 
 # --- REAL ROBOT ENVIRONMENT SETTINGS ---
-REAL_TOPIC_SCAN  = 'robot1/scan'
+REAL_TOPIC_SCAN  = 'robot1/scan_gated'
 REAL_TOPIC_VELO  = 'robot1/cmd_vel_unstamped'
 REAL_TOPIC_ODOM  = 'robot1/odom'
 
@@ -55,9 +55,12 @@ REAL_ARENA_WIDTH            = 4.2   # meters
 REAL_SPEED_LINEAR_MAX       = 0.22  # in m/s
 REAL_SPEED_ANGULAR_MAX      = 2.0   # in rad/s
 
+# LIDAR ANGLE MEASUREMENT CORRECTION - Thiago's Change
+# Yaw of rplidar_link relative to base_link. Positive yaw is counterclockwise.
+REAL_LIDAR_YAW_IN_BASE      = 1.5707963267948966  # radians (+90 degrees)
 REAL_LIDAR_CORRECTION       = 0.00  # meters, subtracted from the real LiDAR values
 REAL_LIDAR_DISTANCE_CAP     = 3.5   # meters, scan distances are capped this value
-REAL_THRESHOLD_COLLISION    = 0.11  # meters, minimum distance to an object that counts as a collision
+REAL_THRESHOLD_COLLISION    = 0.20  # meters, minimum distance to an object that counts as a collision
 REAL_THRESHOLD_GOAL         = 0.35  # meters, minimum distance to goal that counts as reaching the goal
 
 

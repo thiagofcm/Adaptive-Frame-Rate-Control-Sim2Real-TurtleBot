@@ -32,7 +32,8 @@ from rclpy.qos import QoSProfile, qos_profile_sensor_data
 
 from ..common import utilities as util
 from ..common.settings import ENABLE_BACKWARD, UNKNOWN, SUCCESS, COLLISION_WALL, REAL_ARENA_LENGTH, REAL_ARENA_WIDTH, \
-                                REAL_SPEED_LINEAR_MAX, REAL_SPEED_ANGULAR_MAX, REAL_N_SCAN_SAMPLES, REAL_LIDAR_DISTANCE_CAP, REAL_LIDAR_CORRECTION, \
+                                REAL_SPEED_LINEAR_MAX, REAL_SPEED_ANGULAR_MAX, REAL_N_SCAN_SAMPLES, REAL_LIDAR_YAW_IN_BASE, \
+                                    REAL_LIDAR_DISTANCE_CAP, REAL_LIDAR_CORRECTION, \
                                     REAL_THRESHOLD_COLLISION, REAL_THRESHOLD_GOAL, REAL_TOPIC_SCAN, REAL_TOPIC_VELO, REAL_TOPIC_ODOM
 
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
@@ -46,6 +47,10 @@ class DRLEnvironment(Node):
     def __init__(self):
         super().__init__('drl_environment')
         print(f"running on real stage")
+        print(
+            f"real thresholds: goal={REAL_THRESHOLD_GOAL:.3f} m, "
+            f"collision={REAL_THRESHOLD_COLLISION:.3f} m"
+        )
 
         self.scan_topic = REAL_TOPIC_SCAN
         self.velo_topic = REAL_TOPIC_VELO
@@ -147,9 +152,29 @@ class DRLEnvironment(Node):
 
     def scan_callback(self, msg):   # for turtlebot3
         num_samples = len(msg.ranges)
-        # Evenly subsample to REAL_N_SCAN_SAMPLES across full 360°
-        indices = [int(i * num_samples / REAL_N_SCAN_SAMPLES) 
-                for i in range(REAL_N_SCAN_SAMPLES)]
+
+        if num_samples == 0 or msg.angle_increment == 0.0:
+            return
+
+        # The model was trained with scan_ranges[0] pointing along
+        # base_link +X (robot-forward). Convert that direction into the
+        # rplidar_link frame, then find its index in the incoming scan.
+        front_angle_in_lidar = -REAL_LIDAR_YAW_IN_BASE
+        front_index = round(
+            (front_angle_in_lidar - msg.angle_min) / msg.angle_increment
+        ) % num_samples
+
+        # Preserve the scan's increasing-angle direction while evenly
+        # subsampling the full circle to the number of rays used in training.
+        index_direction = 1 if msg.angle_increment > 0.0 else -1
+        indices = [
+            (
+                front_index
+                + round(index_direction * i * num_samples / REAL_N_SCAN_SAMPLES)
+            ) % num_samples
+            for i in range(REAL_N_SCAN_SAMPLES)
+        ]
+
         self.obstacle_distance = 1
         for i, idx in enumerate(indices):
             raw = float(msg.ranges[idx])
@@ -182,7 +207,11 @@ class DRLEnvironment(Node):
             self.succeed = SUCCESS
         # Collision
         elif self.obstacle_distance < REAL_THRESHOLD_COLLISION:
-            print("Collision! (wall) :(")
+            print(
+                "Collision! (wall): "
+                f"minimum scan distance={self.obstacle_distance:.3f} m, "
+                f"threshold={REAL_THRESHOLD_COLLISION:.3f} m"
+            )
             self.succeed = COLLISION_WALL
         # Timeout
         # elif self.time_sec >= self.episode_deadline:
@@ -193,6 +222,17 @@ class DRLEnvironment(Node):
         return state
 
     def initalize_episode(self, response):
+        # A new DrlStep initialization acknowledges the pending manual goal
+        # and resets all per-episode environment state. Keeping goal_comm true
+        # until this point prevents a service poll from consuming the goal
+        # before the evaluator receives the matching /goal_pose message.
+        self.new_goal = False
+        self.done = False
+        self.succeed = UNKNOWN
+        self.local_step = 0
+        self.total_distance = 0.0
+        self.robot_x_prev = self.robot_x
+        self.robot_y_prev = self.robot_y
         self.initial_distance_to_goal = self.goal_distance
         response.state = self.get_state(0, 0)
         response.reward = 0.0
