@@ -1,0 +1,2 @@
+policy_name,mean_fps,std_fps,n_episodes_total,success_rate_percent,mean_duration_s,std_duration_s,mean_distance_traveled_m,std_distance_traveled_m,mean_n_fresh_observations,std_n_fresh_observations
+transfer_fc0.03,0.994644,0.024555,10,100.000000,37.854695,6.424640,7.375070,1.049229,36.900000,5.704774
