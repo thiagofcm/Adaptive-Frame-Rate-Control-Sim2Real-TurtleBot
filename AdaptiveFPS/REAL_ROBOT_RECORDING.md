@@ -148,6 +148,41 @@ Every completed episode prints its number, policy, outcome, success/collision/
 timeout flags, duration, path distance, mean current FPS, fresh-observation count,
 start/goal/final coordinates, final goal distance, and save directory.
 
+## LiDAR recording
+
+Both evaluators also write `lidar.npz` and `lidar.csv` in every episode folder
+(including interrupted ones). Every native `/robot1/scan` message the evaluator
+receives is recorded before the gate decides anything, from the episode start
+until the terminal trajectory row. Scans after that row are not kept.
+
+Each scan is stored at the 40 beams the navigation state uses
+(`real_scan_beam_indices` in `drl_environment_real.py`, shared with
+`scan_callback`; for each Gazebo training direction, `6.28/39` rad apart
+from forward, the nearest native sample), as raw meters: no 3.5 m cap, no correction, no
+normalization, with `inf`/`nan` kept as published. This matches the stage
+Gazebo records.
+
+`lidar.npz` keeps the Gazebo keys and adds real-robot extras:
+
+| Key | Meaning |
+| --- | --- |
+| `t_wall` | seconds since the episode start, same origin as `episode_time_s` in `trajectory.csv` (monotonic receipt time) |
+| `t_sim` | all `NaN`: the robot has no simulation clock; kept so Gazebo tools fall back to `t_wall` |
+| `ranges` | scans x 40, float32 meters |
+| `forwarded` | 1 if the gate published this exact scan to `/robot1/scan_gated` |
+| `t_ros` | header stamp minus the evaluator's ROS time at episode start (robot clock; may be offset from the PC clock) |
+| `stamp_ros` | absolute header stamp, seconds |
+| `beam_angle_rad` | scans x 40, robot-frame angle of each selected beam, from that scan's `angle_min`/`angle_increment` and the LiDAR mount yaw |
+
+`lidar.csv` holds the same samples. Its first 43 columns are exactly the Gazebo
+`npz_to_csv.py` layout and number formats
+(`scan_index,t_sim_s,t_wall_s,beam_00..beam_39`); then
+`forwarded,t_ros_s,stamp_ros_s,angle_00..angle_39`.
+Ranges are written with 6 decimals, so CSV and NPZ agree within 0.5 µm.
+
+In the terminal trajectory row, `fresh_obs_counter` equals 1 (the forced first
+scan, taken before recording starts) plus the number of forwarded scans.
+
 ## Build once
 
 The evaluator/recorder scripts run directly from the repository, but the real

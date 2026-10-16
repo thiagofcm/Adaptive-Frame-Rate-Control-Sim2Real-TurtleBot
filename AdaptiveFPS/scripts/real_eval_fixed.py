@@ -40,6 +40,9 @@ from turtlebot3_drl.common.settings import (
 )
 from turtlebot3_drl.common.storagemanager import StorageManager
 from turtlebot3_drl.drl_agent.td3 import TD3
+from turtlebot3_drl.drl_environment.drl_environment_real import (
+    real_scan_beam_indices,
+)
 
 from real_episode_recorder import RealEpisodeRecorder
 
@@ -149,7 +152,7 @@ class RealFixedEvaluator(Node):
         self.raw_scan_sub = self.create_subscription(
             LaserScan,
             self.raw_scan_topic,
-            self._on_raw_scan,
+            self._on_raw_scan_recorded,
             qos_profile_sensor_data,
         )
         self.odom_sub = self.create_subscription(
@@ -245,6 +248,20 @@ class RealFixedEvaluator(Node):
         self.gated_scan_count += 1
         self.last_forward_time = now
         self.recorder.note_fresh_observation(now)
+
+    def _on_raw_scan_recorded(self, msg):
+        """Raw-scan subscription callback: run the gate (unchanged), then
+        record this native scan with whether the gate forwarded it."""
+        now = time.monotonic()
+        gated_before = self.gated_scan_count
+        self._on_raw_scan(msg)
+        if self.recorder.lidar_recording:
+            self.recorder.note_scan(
+                now,
+                msg,
+                real_scan_beam_indices(msg),
+                forwarded=self.gated_scan_count > gated_before,
+            )
 
     def _on_raw_scan(self, msg):
         now = time.monotonic()
@@ -400,6 +417,7 @@ class RealFixedEvaluator(Node):
         self.recorder.start_episode(
             goal=goal,
             initial_fresh_time=self.last_forward_time,
+            ros_time_origin=self.get_clock().now().nanoseconds * 1e-9,
         )
         self._set_record_state(0.0, 0.0, UNKNOWN, False)
         self._record_current_sample()

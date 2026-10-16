@@ -13,8 +13,9 @@ Runtime architecture
     -> DrlStep action
     -> real_environment publishes cmd_vel
 
-The recurrent PPO adaptive policy runs at 10 Hz wall time.  It observes:
-    [44-D navigation state, fps_ratio, obs_age_ratio, frame_count_ratio]
+The recurrent PPO adaptive policy runs at 10 Hz wall time.  It observes the
+canonical 43-D Gazebo observation (adaptive_obs.py):
+    [40 held LiDAR rays, fps_ratio, obs_age_ratio, frame_count_ratio]
 and chooses one of:
     [0.2, 0.5, 1.0, 5.0, 10.0] Hz
 
@@ -77,8 +78,17 @@ from turtlebot3_drl.common.settings import (
     UNKNOWN,
 )
 from turtlebot3_drl.drl_agent.td3 import TD3
+from turtlebot3_drl.drl_environment.drl_environment_real import (
+    real_scan_beam_indices,
+)
 
 from real_episode_recorder import RealEpisodeRecorder
+from adaptive_obs import (
+    ADAPTIVE_FRAME_BUDGET,
+    ADAPTIVE_OBS_DIM,
+    ADAPTIVE_OBS_LAYOUT,
+    check_adaptive_checkpoint,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -88,13 +98,20 @@ FPS_CHOICES = [0.2, 0.5, 1.0, 5.0, 10.0]
 PPO_RATE_HZ = 10.0
 PPO_DT = 1.0 / PPO_RATE_HZ
 
-# Training-equivalent normalization:
-# slowest choice = 0.2 Hz -> maximum nominal observation age = 5 s.
-MAX_OBS_AGE_S = 1.0 / min(FPS_CHOICES)
+# Gazebo AdaptiveFPSEnv._max_obs_interval: observation age is counted in PPO
+# steps; slowest choice 0.2 Hz -> 10 / 0.2 = 50 PPO steps (5 s).
+MAX_OBS_AGE_STEPS = PPO_RATE_HZ / min(FPS_CHOICES)
 
-# PPO state = real navigation state + 3 sensing features.
+# The TD3 navigation state stays 44-D. The PPO observation is the canonical
+# 43-D one: the 40 held LiDAR rays (first entries of the TD3 state) + 3 features.
 NAV_STATE_DIM = REAL_N_SCAN_SAMPLES + 4
-PPO_STATE_DIM = NAV_STATE_DIM + 3
+PPO_STATE_DIM = REAL_N_SCAN_SAMPLES + 3
+if PPO_STATE_DIM != ADAPTIVE_OBS_DIM:
+    raise RuntimeError(
+        f"REAL_N_SCAN_SAMPLES={REAL_N_SCAN_SAMPLES} gives a {PPO_STATE_DIM}-D "
+        f"PPO observation; the checkpoints expect {ADAPTIVE_OBS_DIM}-D "
+        f"({ADAPTIVE_OBS_LAYOUT})"
+    )
 
 RAW_SCAN_TOPIC = "/robot1/scan"
 GOAL_TOPIC = "/goal_pose"
@@ -219,6 +236,7 @@ class RealAdaptiveEvaluator(Node):
         output_root,
         timeout_seconds,
         diagnose_probs=False,
+        budget=ADAPTIVE_FRAME_BUDGET,
     ):
         super().__init__("real_adaptive_fps_evaluator")
 
@@ -290,7 +308,7 @@ class RealAdaptiveEvaluator(Node):
         self.raw_scan_sub = self.create_subscription(
             LaserScan,
             self.raw_scan_topic,
-            self._on_raw_scan,
+            self._on_raw_scan_recorded,
             qos_profile_sensor_data,
         )
 
@@ -361,6 +379,35 @@ class RealAdaptiveEvaluator(Node):
         # ------------------------------------------------------------------
         checkpoint = torch.load(adaptive_model_path, map_location="cpu")
 
+        # Same compatibility rules as the Gazebo eval.py: 43-D input, matching
+        # fps_choices, and a matching frame budget (missing -> legacy 450).
+        try:
+            checkpoint_summary = check_adaptive_checkpoint(
+                checkpoint, FPS_CHOICES, budget
+            )
+        except ValueError as exc:
+            raise SystemExit(
+                f"cannot evaluate {adaptive_model_path}:\n  {exc}"
+            )
+        self.budget = float(checkpoint_summary["budget"])
+        if not checkpoint_summary["budget_stored"]:
+            self.get_logger().warning(
+                f"Checkpoint stores no frame budget; assuming the legacy "
+                f"default {checkpoint_summary['budget']} for frame_ratio. "
+                "Verify this matches the budget it was trained with."
+            )
+        self.recorder.configuration.update(
+            {
+                "policy_obs_dim": PPO_STATE_DIM,
+                "policy_obs_layout": ADAPTIVE_OBS_LAYOUT,
+                "frame_budget": self.budget,
+                "checkpoint_budget_stored": checkpoint_summary["budget_stored"],
+                "checkpoint_frame_cost": checkpoint_summary["frame_cost"],
+                "checkpoint_env_id": checkpoint_summary["env_id"],
+                "checkpoint_scene": checkpoint_summary["scene"],
+            }
+        )
+
         lstm_hidden_size = checkpoint.get("args", {}).get(
             "lstm_hidden_size", 64
         )
@@ -378,8 +425,11 @@ class RealAdaptiveEvaluator(Node):
             f"  TD3: {nav_model_run}, episode={nav_episode}, "
             f"state_dim={self.nav_model.state_size}, "
             f"step_time={self.nav_model.step_time}\n"
-            f"  PPO: {adaptive_model_path}, obs_dim={PPO_STATE_DIM}, "
-            f"actions={FPS_CHOICES}, lstm_hidden={lstm_hidden_size}"
+            f"  PPO: {adaptive_model_path}, obs_dim={PPO_STATE_DIM} "
+            f"({ADAPTIVE_OBS_LAYOUT}), actions={FPS_CHOICES}, "
+            f"lstm_hidden={lstm_hidden_size}, budget={self.budget:g} "
+            f"(stored={checkpoint_summary['budget_stored']}), "
+            f"trained frame_cost={checkpoint_summary['frame_cost']}"
         )
 
         self.get_logger().info(
@@ -441,6 +491,20 @@ class RealAdaptiveEvaluator(Node):
         self.gated_scan_count += 1
         self.last_forward_time = now
         self.recorder.note_fresh_observation(now)
+
+    def _on_raw_scan_recorded(self, msg):
+        """Raw-scan subscription callback: run the gate (unchanged), then
+        record this native scan with whether the gate forwarded it."""
+        now = time.monotonic()
+        gated_before = self.gated_scan_count
+        self._on_raw_scan(msg)
+        if self.recorder.lidar_recording:
+            self.recorder.note_scan(
+                now,
+                msg,
+                real_scan_beam_indices(msg),
+                forwarded=self.gated_scan_count > gated_before,
+            )
 
     def _on_raw_scan(self, msg):
         now = time.monotonic()
@@ -621,46 +685,33 @@ class RealAdaptiveEvaluator(Node):
     # PPO observation
     # ======================================================================
 
-    @staticmethod
-    def max_training_frames():
-        # Gazebo training denominator:
-        # timeout * maximum sensing rate = timeout * 10 Hz.
-        return max(1, int(round(EPISODE_TIMEOUT_SECONDS * max(FPS_CHOICES))))
-
-    def make_ppo_observation(self, nav_state, episode_frame_count):
+    def make_ppo_observation(
+        self, nav_state, episode_frame_count, steps_since_last_obs
+    ):
+        """Canonical 43-D observation, as Gazebo AdaptiveFPSEnv.get_augmented_obs():
+        [40 held LiDAR rays, fps_ratio, obs_age_ratio, frame_count_ratio]."""
         if len(nav_state) != NAV_STATE_DIM:
             raise ValueError(
                 f"Expected {NAV_STATE_DIM}-D navigation state, "
                 f"got {len(nav_state)}"
             )
 
-        # Keep action-space normalization exactly training-compatible.
-        fps_ratio = self.current_fps / max(FPS_CHOICES)
+        # Logical PPO-selected rate (not the delivered LiDAR rate): 10 Hz -> 1.0.
+        fps_ratio = self.current_fps / PPO_RATE_HZ
 
-        # Sim2Real conversion of Gazebo's native-scan-count age feature:
-        # represent the same physical notion as elapsed time / 5 seconds.
-        if self.last_forward_time is None:
-            obs_age_s = 0.0
-        else:
-            obs_age_s = max(
-                0.0, time.monotonic() - self.last_forward_time
-            )
-
+        # PPO steps since the last consumed fresh scan / 50, as in Gazebo.
         obs_age_ratio = float(
-            np.clip(obs_age_s / MAX_OBS_AGE_S, 0.0, 1.0)
+            np.clip(steps_since_last_obs / MAX_OBS_AGE_STEPS, 0.0, 1.0)
         )
 
+        # Fresh scans this episode / checkpoint frame budget, as in Gazebo.
         frame_count_ratio = float(
-            np.clip(
-                episode_frame_count / self.max_training_frames(),
-                0.0,
-                1.0,
-            )
+            np.clip(episode_frame_count / self.budget, 0.0, 1.0)
         )
 
         obs = np.concatenate(
             [
-                np.asarray(nav_state, dtype=np.float32),
+                np.asarray(nav_state[:REAL_N_SCAN_SAMPLES], dtype=np.float32),
                 np.asarray(
                     [fps_ratio, obs_age_ratio, frame_count_ratio],
                     dtype=np.float32,
@@ -711,6 +762,7 @@ class RealAdaptiveEvaluator(Node):
         self.recorder.start_episode(
             goal=goal,
             initial_fresh_time=self.last_forward_time,
+            ros_time_origin=self.get_clock().now().nanoseconds * 1e-9,
         )
         self._set_record_state(0.0, 0.0, UNKNOWN, False)
         self._record_current_sample()
@@ -722,9 +774,11 @@ class RealAdaptiveEvaluator(Node):
         # Gazebo reset semantics count the initial acquired frame as frame #1.
         episode_frame_count = 1
         last_seen_gated_count = self.gated_scan_count
+        # Gazebo reset(): steps_since_last_obs = 0.
+        steps_since_last_obs = 0
 
         ppo_obs, _, _, _ = self.make_ppo_observation(
-            nav_state, episode_frame_count
+            nav_state, episode_frame_count, steps_since_last_obs
         )
 
         hidden_size = self.adaptive_model.lstm.hidden_size
@@ -783,6 +837,10 @@ class RealAdaptiveEvaluator(Node):
             )
             requested_fps = FPS_CHOICES[adaptive_action]
 
+            # Gazebo step(): incremented at the start of every PPO step and
+            # reset to 0 if that step consumes a fresh scan.
+            steps_since_last_obs += 1
+
             ppo_step_start = time.monotonic()
             frame_consumed_this_ppo_step = False
             causal_action_applied = False
@@ -831,6 +889,7 @@ class RealAdaptiveEvaluator(Node):
                     episode_frame_count += new_frames
                     last_seen_gated_count = self.gated_scan_count
                     frame_consumed_this_ppo_step = True
+                    steps_since_last_obs = 0
 
                     # Same causal semantics as Gazebo:
                     # the action chosen at the BEGINNING of this PPO step
@@ -881,7 +940,7 @@ class RealAdaptiveEvaluator(Node):
                 obs_age_ratio,
                 frame_count_ratio,
             ) = self.make_ppo_observation(
-                nav_state, episode_frame_count
+                nav_state, episode_frame_count, steps_since_last_obs
             )
 
             if (
@@ -896,6 +955,7 @@ class RealAdaptiveEvaluator(Node):
                     f"fresh={int(frame_consumed_this_ppo_step)} "
                     f"active_fps={self.current_fps:g} "
                     f"fps_ratio={fps_ratio:.3f} "
+                    f"age_steps={steps_since_last_obs} "
                     f"age_ratio={obs_age_ratio:.3f} "
                     f"frame_ratio={frame_count_ratio:.3f}"
                 )
@@ -1024,6 +1084,13 @@ def main():
         action="store_true",
         help="Print recurrent PPO probability distribution at causal decisions",
     )
+    parser.add_argument(
+        "--budget",
+        type=int,
+        default=ADAPTIVE_FRAME_BUDGET,
+        help="Frame budget: frame_ratio = episode frame count / budget. Must "
+        "match the checkpoint's training budget (default: %(default)s)",
+    )
 
     args, ros_args = parser.parse_known_args()
 
@@ -1054,6 +1121,7 @@ def main():
         output_root=args.output_root,
         timeout_seconds=args.timeout_seconds,
         diagnose_probs=args.diagnose_probs,
+        budget=args.budget,
     )
 
     try:

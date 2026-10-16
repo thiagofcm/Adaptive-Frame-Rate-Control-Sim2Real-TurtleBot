@@ -1,0 +1,50 @@
+exp_name: train_adaptive_fps_ppo
+seed: 1
+torch_deterministic: True
+cuda: False
+track: False
+wandb_project_name: cleanRL
+wandb_entity: None
+frame_cost: 0.03
+budget: 450
+total_timesteps: 2000000
+learning_rate: 0.0003
+num_envs: 1
+num_steps: 2048
+lstm_hidden_size: 64
+anneal_lr: False
+gamma: 0.99
+gae_lambda: 0.98
+num_minibatches: 1
+update_epochs: 4
+norm_adv: True
+clip_coef: 0.2
+clip_vloss: True
+ent_coef: 0.05
+vf_coef: 0.5
+max_grad_norm: 0.5
+target_kl: None
+batch_size: 2048
+minibatch_size: 2048
+num_iterations: 976
+max_episode_steps: 100000
+resume_path: /home/turtlebot3_drlnav/AdaptiveFPS/runs/stage14/transfer/adaptive_transfer_stage14_fc0.03_bud450_2026-10-06_16-02-21/ckpts/timestep_901120_iterations_440/ckpt_901120_iterations_440.pt
+pretrained_path: None
+checkpoint_interval: 10
+obs_layout: retained_scan[0:40], fps_ratio, obs_age_ratio, frame_ratio
+env_id: AdaptiveFPSTurtleBot-v0
+gazebo_stage: 14
+init_mode: pretrained
+init_source_path: /home/turtlebot3_drlnav/Adaptive_Policies_SimpleEnv/models/corridor_dynamic_chase_random/adaptive_fps_02-10-15-49-40_fc_0.03/model.pt
+init_source_sha256: 2fd8a36ce7918c551dfa053a1d2e4e034547f43870055c2e111f2e1bc6c10184
+init_source_env_id: TurtleBot_VarScanRate
+init_source_scene: corridor_dynamic_chase_random
+init_source_frame_cost: 0.03
+init_source_budget: 450
+init_source_budget_stored: False
+init_source_global_step: 199983104
+init_source_iteration: 6103
+init_source_lstm_hidden_size: 64
+init_loaded_components: ['network', 'lstm', 'actor', 'critic']
+resumed_from_0: /home/turtlebot3_drlnav/AdaptiveFPS/runs/stage14/transfer/adaptive_transfer_stage14_fc0.03_bud450_2026-10-06_16-02-21/ckpts/timestep_901120_iterations_440/ckpt_901120_iterations_440.pt (sha256 cc6b1a54e63335b9a10169b7ea412bbebbe8a0fe20d9a041c5101b53b200b952, global_step 901120, iteration 440)
+Resumed from checkpoint: /home/turtlebot3_drlnav/AdaptiveFPS/runs/stage14/transfer/adaptive_transfer_stage14_fc0.03_bud450_2026-10-06_16-02-21/ckpts/timestep_901120_iterations_440/ckpt_901120_iterations_440.pt

@@ -9,9 +9,13 @@ import re
 import time
 from pathlib import Path
 
+import numpy as np
+
 from turtlebot3_drl.common.settings import (
     COLLISION_OBSTACLE,
     COLLISION_WALL,
+    REAL_LIDAR_YAW_IN_BASE,
+    REAL_N_SCAN_SAMPLES,
     SUCCESS,
     TIMEOUT,
     TUMBLE,
@@ -61,6 +65,21 @@ EPISODE_FIELDS = [
     "goal_y",
     "final_goal_distance",
 ]
+
+# LiDAR recording (lidar.npz / lidar.csv). The first columns follow the Gazebo
+# npz_to_csv.py layout exactly; the real-robot extras are appended after them.
+LIDAR_CSV_FIELDS = (
+    ["scan_index", "t_sim_s", "t_wall_s"]
+    + [f"beam_{i:02d}" for i in range(REAL_N_SCAN_SAMPLES)]
+    + ["forwarded", "t_ros_s", "stamp_ros_s"]
+    + [f"angle_{i:02d}" for i in range(REAL_N_SCAN_SAMPLES)]
+)
+LIDAR_CSV_FORMATS = (
+    ["%d", "%.9f", "%.9f"]
+    + ["%.6f"] * REAL_N_SCAN_SAMPLES
+    + ["%d", "%.9f", "%.9f"]
+    + ["%.9f"] * REAL_N_SCAN_SAMPLES
+)
 
 OUTCOME_NAMES = {
     UNKNOWN: "UNKNOWN",
@@ -120,10 +139,55 @@ class RealEpisodeRecorder:
         self._episode_configuration = {}
         self._trajectory_file = None
         self._trajectory_writer = None
+        self._ros_time_origin = None
+        self._reset_lidar_buffers()
 
     @property
     def fresh_observation_count(self):
         return len(self._fresh_times)
+
+    @property
+    def lidar_recording(self):
+        """True while native scans are being recorded (episode start to terminal row)."""
+        return self.active and not self._lidar_stopped
+
+    def _reset_lidar_buffers(self):
+        self._lidar_stopped = False
+        self._lidar_t_wall = []
+        self._lidar_stamp_ros = []
+        self._lidar_ranges = []
+        self._lidar_angles = []
+        self._lidar_forwarded = []
+
+    def note_scan(self, now_monotonic, msg, indices, forwarded):
+        """Record one native LiDAR scan at the 40 beams the navigation state uses.
+
+        msg is a sensor_msgs/LaserScan (only ranges, angle_min, angle_increment
+        and header.stamp are read). indices are the native beam indices from
+        drl_environment_real.real_scan_beam_indices(msg). Ranges are kept in
+        meters exactly as published (inf/NaN preserved, no cap, no correction,
+        no normalization), matching what Gazebo records. forwarded is True if
+        the gate published this exact scan to the gated topic.
+        """
+        if not self.lidar_recording or indices is None:
+            return False
+
+        raw_index = np.asarray(indices, dtype=np.int32)
+        all_ranges = np.asarray(msg.ranges, dtype=np.float32)
+        angles = (
+            float(msg.angle_min)
+            + raw_index.astype(np.float64) * float(msg.angle_increment)
+            + REAL_LIDAR_YAW_IN_BASE
+        )
+        angles = (angles + math.pi) % (2.0 * math.pi) - math.pi   # robot frame, [-pi, pi)
+
+        stamp = msg.header.stamp
+        self._lidar_t_wall.append(float(now_monotonic) - self.start_monotonic)
+        self._lidar_stamp_ros.append(int(stamp.sec) + int(stamp.nanosec) * 1e-9)
+        self._lidar_ranges.append(all_ranges[raw_index])
+        self._lidar_angles.append(angles.astype(np.float32))
+        self._lidar_forwarded.append(1 if forwarded else 0)
+        return True
 
     def update_pose(self, x, y, yaw, sample_id=None):
         """Cache odometry and accumulate path length only during an episode."""
@@ -154,8 +218,13 @@ class RealEpisodeRecorder:
         initial_fresh_time=None,
         configuration=None,
         now_monotonic=None,
+        ros_time_origin=None,
     ):
-        """Create a new episode directory when navigation is ready to begin."""
+        """Create a new episode directory when navigation is ready to begin.
+
+        ros_time_origin (seconds, the evaluator node's ROS clock at this
+        instant) is the origin of the LiDAR t_ros column; None leaves it NaN.
+        """
         if self.active:
             raise RuntimeError("an episode is already being recorded")
         if self.latest_pose is None:
@@ -195,6 +264,10 @@ class RealEpisodeRecorder:
         self._current_fps_sum = 0.0
         self._current_fps_sample_count = 0
         self._episode_configuration = dict(configuration or {})
+        self._ros_time_origin = (
+            None if ros_time_origin is None else float(ros_time_origin)
+        )
+        self._reset_lidar_buffers()
 
         if initial_fresh_time is not None:
             self.note_fresh_observation(initial_fresh_time)
@@ -267,6 +340,10 @@ class RealEpisodeRecorder:
         self._current_fps_sum += current_fps
         self._current_fps_sample_count += 1
         self._fresh_count_at_last_row = fresh_count
+        if done:
+            # LiDAR recording ends at the terminal row, like Gazebo pausing at
+            # the terminal step; later scans (safe stop, wrap-up) are not kept.
+            self._lidar_stopped = True
         return row
 
     def finish_episode(self, outcome, configuration=None, now_monotonic=None):
@@ -325,6 +402,7 @@ class RealEpisodeRecorder:
         )
 
         self._close_trajectory()
+        self._write_lidar()
         self._write_json_atomic(self.episode_dir / "metadata.json", metadata)
         self._append_episode_summary(metadata)
         self._print_summary(metadata)
@@ -354,6 +432,7 @@ class RealEpisodeRecorder:
             "n_fresh_observations": self.fresh_observation_count,
         }
         self._close_trajectory()
+        self._write_lidar()
         self._write_json_atomic(
             self.episode_dir / "metadata.partial.json",
             partial,
@@ -393,6 +472,68 @@ class RealEpisodeRecorder:
             writer.writerow({field: metadata[field] for field in EPISODE_FIELDS})
             handle.flush()
             os.fsync(handle.fileno())
+
+    def lidar_arrays(self):
+        """The recorded native scans as arrays: Gazebo keys (t_wall, t_sim,
+        ranges) plus real-robot extras. lidar.npz and lidar.csv are both
+        written from exactly these arrays."""
+        n = len(self._lidar_t_wall)
+        beams = REAL_N_SCAN_SAMPLES
+        stamp_ros = np.asarray(self._lidar_stamp_ros, dtype=np.float64)
+        origin = np.nan if self._ros_time_origin is None else self._ros_time_origin
+        return {
+            # Gazebo keys. t_sim is NaN: the real robot has no simulation clock.
+            "t_wall": np.asarray(self._lidar_t_wall, dtype=np.float64),
+            "t_sim": np.full(n, np.nan, dtype=np.float64),
+            "ranges": (np.stack(self._lidar_ranges).astype(np.float32) if n
+                       else np.zeros((0, beams), dtype=np.float32)),
+            # Real-robot extras.
+            "forwarded": np.asarray(self._lidar_forwarded, dtype=np.int8),
+            "t_ros": stamp_ros - origin,
+            "stamp_ros": stamp_ros,
+            "beam_angle_rad": (np.stack(self._lidar_angles).astype(np.float32) if n
+                               else np.zeros((0, beams), dtype=np.float32)),
+        }
+
+    def _write_lidar(self):
+        """Write lidar.npz and lidar.csv (Gazebo npz_to_csv.py column layout
+        and number formats first, real-robot extras appended), atomically."""
+        arrays = self.lidar_arrays()
+        n = len(arrays["t_wall"])
+
+        npz_path = self.episode_dir / "lidar.npz"
+        temporary_npz = npz_path.with_suffix(".npz.tmp")
+        with temporary_npz.open("wb") as handle:
+            np.savez_compressed(handle, **arrays)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_npz, npz_path)
+
+        table = np.column_stack((
+            np.arange(n, dtype=np.float64),
+            arrays["t_sim"],
+            arrays["t_wall"],
+            arrays["ranges"].astype(np.float64),
+            arrays["forwarded"].astype(np.float64),
+            arrays["t_ros"],
+            arrays["stamp_ros"],
+            arrays["beam_angle_rad"].astype(np.float64),
+        )) if n else np.zeros((0, len(LIDAR_CSV_FIELDS)))
+
+        csv_path = self.episode_dir / "lidar.csv"
+        temporary_csv = csv_path.with_suffix(".csv.tmp")
+        with temporary_csv.open("w", encoding="utf-8") as handle:
+            np.savetxt(
+                handle,
+                table,
+                delimiter=",",
+                header=",".join(LIDAR_CSV_FIELDS),
+                comments="",
+                fmt=LIDAR_CSV_FORMATS,
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_csv, csv_path)
 
     @staticmethod
     def _write_json_atomic(path, payload):

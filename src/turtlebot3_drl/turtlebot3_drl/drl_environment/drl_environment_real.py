@@ -34,7 +34,8 @@ from ..common import utilities as util
 from ..common.settings import ENABLE_BACKWARD, UNKNOWN, SUCCESS, COLLISION_WALL, REAL_ARENA_LENGTH, REAL_ARENA_WIDTH, \
                                 REAL_SPEED_LINEAR_MAX, REAL_SPEED_ANGULAR_MAX, REAL_N_SCAN_SAMPLES, REAL_LIDAR_YAW_IN_BASE, \
                                     REAL_LIDAR_DISTANCE_CAP, REAL_LIDAR_CORRECTION, \
-                                    REAL_THRESHOLD_COLLISION, REAL_THRESHOLD_GOAL, REAL_TOPIC_SCAN, REAL_TOPIC_VELO, REAL_TOPIC_ODOM
+                                    REAL_THRESHOLD_COLLISION, REAL_THRESHOLD_GOAL, REAL_TOPIC_SCAN, REAL_TOPIC_VELO, REAL_TOPIC_ODOM, \
+                                    SIM_LIDAR_ANGLE_MIN, SIM_LIDAR_ANGLE_MAX
 
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 
@@ -42,6 +43,43 @@ LINEAR = 0
 ANGULAR = 1
 
 MAX_GOAL_DISTANCE = math.sqrt(REAL_ARENA_LENGTH**2 + REAL_ARENA_WIDTH**2)
+
+
+# Training beam directions in the robot frame (radians, CCW from forward), as the
+# Gazebo ray sensor publishes them: angle_increment = (max - min) / (samples - 1),
+# i.e. 6.28 / 39 rad, so beam 39 lands 0.18 deg short of beam 0.
+GAZEBO_BEAM_ANGLES = numpy.array([
+    SIM_LIDAR_ANGLE_MIN
+    + i * (SIM_LIDAR_ANGLE_MAX - SIM_LIDAR_ANGLE_MIN) / (REAL_N_SCAN_SAMPLES - 1)
+    for i in range(REAL_N_SCAN_SAMPLES)
+])
+
+
+def real_scan_beam_indices(msg):
+    """Native indices of the REAL_N_SCAN_SAMPLES beams used as the 40-ray scan:
+    for each Gazebo training direction, the native sample nearest to it.
+
+    Shared by DRLEnvironment.scan_callback and the evaluators' LiDAR recording,
+    so the recorded beams are exactly the beams the navigation state uses.
+    Returns None for a scan that cannot be subsampled.
+    """
+    num_samples = len(msg.ranges)
+
+    if num_samples == 0 or msg.angle_increment == 0.0:
+        return None
+
+    # Native sample directions in the LiDAR frame, and the training directions
+    # converted into that frame (the LiDAR is mounted at REAL_LIDAR_YAW_IN_BASE).
+    native = msg.angle_min + numpy.arange(num_samples) * msg.angle_increment
+    targets = GAZEBO_BEAM_ANGLES - REAL_LIDAR_YAW_IN_BASE
+
+    # Wrapped angular error for every (target, native sample) pair; nearest wins.
+    # Works for either scan direction and across the scan's start/end seam.
+    error = numpy.abs(
+        (native[None, :] - targets[:, None] + math.pi) % (2.0 * math.pi) - math.pi
+    )
+    return [int(k) for k in numpy.argmin(error, axis=1)]
+
 
 class DRLEnvironment(Node):
     def __init__(self):
@@ -151,29 +189,9 @@ class DRLEnvironment(Node):
     #    self.obstacle_distance *= REAL_LIDAR_DISTANCE_CAP
 
     def scan_callback(self, msg):   # for turtlebot3
-        num_samples = len(msg.ranges)
-
-        if num_samples == 0 or msg.angle_increment == 0.0:
+        indices = real_scan_beam_indices(msg)
+        if indices is None:
             return
-
-        # The model was trained with scan_ranges[0] pointing along
-        # base_link +X (robot-forward). Convert that direction into the
-        # rplidar_link frame, then find its index in the incoming scan.
-        front_angle_in_lidar = -REAL_LIDAR_YAW_IN_BASE
-        front_index = round(
-            (front_angle_in_lidar - msg.angle_min) / msg.angle_increment
-        ) % num_samples
-
-        # Preserve the scan's increasing-angle direction while evenly
-        # subsampling the full circle to the number of rays used in training.
-        index_direction = 1 if msg.angle_increment > 0.0 else -1
-        indices = [
-            (
-                front_index
-                + round(index_direction * i * num_samples / REAL_N_SCAN_SAMPLES)
-            ) % num_samples
-            for i in range(REAL_N_SCAN_SAMPLES)
-        ]
 
         self.obstacle_distance = 1
         for i, idx in enumerate(indices):

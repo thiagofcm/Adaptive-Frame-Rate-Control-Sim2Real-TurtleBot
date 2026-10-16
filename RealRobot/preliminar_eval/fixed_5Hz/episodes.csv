@@ -1,0 +1,2 @@
+episode,policy_name,policy_type,success,collision,collision_wall,collision_obstacle,tumble,timeout,outcome_code,outcome_str,episode_duration_s,distance_traveled_m,mean_fps,n_fresh_observations,start_x,start_y,final_x,final_y,goal_x,goal_y,final_goal_distance
+1,fixed_5Hz,fixed,True,False,False,False,False,False,1,SUCCESS,44.08045460470021,9.035557281088392,5.0,221,2.1029336494393647e-08,-2.434444468235597e-08,4.075729846954346,4.755890846252441,4.3,5.0,0.3314911469262344
