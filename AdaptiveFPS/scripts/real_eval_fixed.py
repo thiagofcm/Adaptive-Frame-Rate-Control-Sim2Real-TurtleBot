@@ -45,6 +45,7 @@ from turtlebot3_drl.drl_environment.drl_environment_real import (
 )
 
 from real_episode_recorder import RealEpisodeRecorder
+from real_led import DEFAULT_LED_TOPIC, SensingLedController
 
 
 RAW_SCAN_TOPIC = "/robot1/scan"
@@ -78,6 +79,8 @@ class RealFixedEvaluator(Node):
         cmd_vel_topic,
         step_service,
         goal_service,
+        led_topic=DEFAULT_LED_TOPIC,
+        led_enabled=True,
     ):
         super().__init__("real_fixed_fps_evaluator")
 
@@ -144,6 +147,8 @@ class RealFixedEvaluator(Node):
             self.cmd_vel_topic,
             QoSProfile(depth=10),
         )
+        # Visualization only: USER_LED_2 blinks at a period encoding current_fps.
+        self.led = SensingLedController(self, led_topic, enabled=led_enabled)
         self.gated_pub = self.create_publisher(
             LaserScan,
             self.gated_scan_topic,
@@ -422,6 +427,7 @@ class RealFixedEvaluator(Node):
         self._set_record_state(0.0, 0.0, UNKNOWN, False)
         self._record_current_sample()
         self.record_timer.reset()
+        self.led.set_blink_rate(self.current_fps)
 
         previous_action = [0.0, 0.0]
         nav_step = 0
@@ -432,6 +438,7 @@ class RealFixedEvaluator(Node):
                 >= self.timeout_seconds
             ):
                 self.record_timer.cancel()
+                self.led.turn_off()
                 self.safe_stop()
                 self._set_record_state(0.0, 0.0, TIMEOUT, True)
                 self._record_current_sample()
@@ -461,6 +468,7 @@ class RealFixedEvaluator(Node):
                 if step_time > 0.0:
                     time.sleep(step_time)
 
+        self.led.turn_off()
         self.safe_stop()
         return self.recorder.finish_episode(outcome)
 
@@ -488,6 +496,10 @@ def main():
     parser.add_argument("--cmd-vel-topic", default=absolute_topic(REAL_TOPIC_VELO))
     parser.add_argument("--step-service", default="/step_comm")
     parser.add_argument("--goal-service", default="/goal_comm")
+    parser.add_argument("--led-topic", default=DEFAULT_LED_TOPIC,
+                        help="TurtleBot4 user LED topic for the sensing-rate LED")
+    parser.add_argument("--no-led", action="store_true",
+                        help="Do not show the sensing rate on the TurtleBot4 LED")
     args, ros_args = parser.parse_known_args()
 
     if args.episodes <= 0:
@@ -508,10 +520,13 @@ def main():
         cmd_vel_topic=args.cmd_vel_topic,
         step_service=args.step_service,
         goal_service=args.goal_service,
+        led_topic=args.led_topic,
+        led_enabled=not args.no_led,
     )
 
     try:
         node.wait_for_services()
+        node.led.turn_off()   # clear any LED state left by an earlier run
         for index in range(args.episodes):
             node.run_episode()
             if index + 1 < args.episodes:
@@ -522,6 +537,7 @@ def main():
         if node.recorder.active:
             node.recorder.abort_episode("Ctrl+C or evaluator shutdown")
         try:
+            node.led.turn_off()
             node.safe_stop()
         except Exception as exc:
             print(f"WARNING: final safe-stop failed: {exc}")
