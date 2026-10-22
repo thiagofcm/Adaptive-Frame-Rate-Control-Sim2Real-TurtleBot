@@ -1,0 +1,2 @@
+cycle,leg,target_s,stop_s,along_track_error_m,lateral_m,heading_error_deg,leg_duration_s,turn_rotation_deg,turn_final_error_deg,turn_duration_s
+1,MOVE_TO_END,1.0,1.014756885604626,0.014756885604626069,0.002985353102912064,-0.053888849508473155,11.45018308982253,194.89582572344892,-14.949714572957392,10.900123491883278
