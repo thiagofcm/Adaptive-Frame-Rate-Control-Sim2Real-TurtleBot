@@ -9,10 +9,13 @@ along theta0. Both stay fixed for the whole run.
     s       = (x - x0) cos(theta0) + (y - y0) sin(theta0)       (progress along S->E)
     lateral = -(x - x0) sin(theta0) + (y - y0) cos(theta0)       (left of S->E is positive)
 
-Straight legs use v = 0.06 m/s and w = 0 with NO heading or lateral correction (a
+Straight legs use v = 0.10 m/s and w = 0 with NO heading or lateral correction (a
 baseline for measuring natural drift); a leg ends when s reaches the endpoint within
 --tolerance. Turns aim at the fixed headings theta0 + pi (at E) and theta0 (at S),
 always counter-clockwise, tracked on accumulated yaw so +-180 degrees never jumps.
+After every turn the robot must be confirmed still (distinct odometry samples) and its
+heading must be within 3 degrees, fixed if needed by up to 3 short corrective pulses;
+otherwise the run aborts instead of starting the next leg.
 
 Publishes geometry_msgs/msg/Twist on /<namespace>/cmd_vel_unstamped with the same QoS
 as Robot 1's working velocity publisher (best effort, keep last 10, volatile).
@@ -45,7 +48,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
 
-LINEAR_SPEED_MPS = 0.10     # Gazebo Stage 14 OB1 speed
+LINEAR_SPEED_MPS = 0.10     # test speed (Gazebo Stage 14 OB1 itself moves at 0.06 m/s)
 TRACK_LENGTH_M = 1.0
 RATE_HZ = 20.0
 DISCOVERY_TIMEOUT_S = 15.0
@@ -53,15 +56,16 @@ ODOM_WAIT_S = 3.0           # odometry must be available before any motion
 STOP_REPEATS = 10           # zero commands at the end (0.5 s at 20 Hz)
 ODOM_TIMEOUT_S = 0.5        # abort if odometry is older than this during the run
 
-# STOP phase: zero commands until the robot is still, at most SETTLE_MAX_S.
-SETTLE_MAX_S = 1.5
+# STOP phase: zero commands until SETTLE_SAMPLES distinct odometry samples show the robot
+# still; abort if that does not happen within SETTLE_MAX_S.
+SETTLE_MAX_S = 3.0          # odometry kept reporting rotation 1.45 s after the zero command
 SETTLE_LINEAR = 0.01        # m/s
 SETTLE_ANGULAR = 0.05       # rad/s
-SETTLE_TICKS = 3
+SETTLE_SAMPLES = 3
 
 # Straight legs.
 DEFAULT_TOLERANCE_M = 0.02
-LEG_TIMEOUT_S = 35.0        # about 2x the 16.7 s a 1 m leg takes at 0.06 m/s
+LEG_TIMEOUT_S = 35.0        # a 1 m leg takes 10 s at 0.10 m/s
 TRACK_ABORT_MARGIN_M = 0.15
 LATERAL_ABORT_M = 0.25      # generous: natural drift is being measured, runaways are not allowed
 
@@ -72,11 +76,16 @@ TURN_RATE_MIN = 0.05        # rad/s, keeps the robot from stalling just short of
 TURN_TOLERANCE = math.radians(3.0)
 TURN_TIMEOUT_S = 25.0       # about 2x the expected turn time at 0.3 rad/s
 
+# Heading check after a turn: open-loop corrective pulses, each followed by settling.
+CORRECTION_RATE = 0.10      # rad/s
+MAX_CORRECTIONS = 3
+CORRECTION_MAX_PULSE_S = 6.0
+
 TRAJECTORY_FIELDS = ["t_s", "state", "cycle", "x", "y", "yaw", "s", "lateral",
-                     "heading_error", "cmd_linear", "cmd_angular", "odom_age_s"]
+                     "heading_error", "cmd_linear", "cmd_angular", "odom_age_s", "odom_seq"]
 ENDPOINT_FIELDS = ["cycle", "leg", "target_s", "stop_s", "along_track_error_m", "lateral_m",
-                   "heading_error_deg", "leg_duration_s", "turn_rotation_deg", "turn_final_error_deg",
-                   "turn_duration_s"]
+                   "heading_error_deg", "leg_duration_s", "turn_rotation_deg", "turn_error_after_settle_deg",
+                   "turn_corrections", "turn_final_error_deg", "turn_duration_s"]
 
 
 class Abort(Exception):
@@ -209,23 +218,30 @@ def main():
         traj_writer.writerow({"t_s": time.monotonic() - run["t0"], "state": state, "cycle": cycle,
                               "x": odom["x"], "y": odom["y"], "yaw": odom["yaw"], "s": s,
                               "lateral": lateral, "heading_error": wrap_angle(heading_ref - odom["yaw"]),
-                              "cmd_linear": v, "cmd_angular": w, "odom_age_s": age})
+                              "cmd_linear": v, "cmd_angular": w, "odom_age_s": age,
+                              "odom_seq": odom["count"]})
         run["files"][0].flush()
         return s, lateral
 
-    def settle(cycle, heading_ref):
-        t0, still = time.monotonic(), 0
+    def settle(cycle, heading_ref, label):
+        """Zero velocity until SETTLE_SAMPLES distinct odometry samples show the robot still."""
+        t0, still, last_seq = time.monotonic(), 0, odom["count"]
         t_next = t0 + period
-        while time.monotonic() - t0 < SETTLE_MAX_S:
+        while True:
             send(0.0)
             log_tick("STOP", cycle, heading_ref, 0.0, 0.0)
             t_next = wait_tick(t_next)
-            still = still + 1 if abs(odom["v"]) < SETTLE_LINEAR and abs(odom["w"]) < SETTLE_ANGULAR else 0
-            if still >= SETTLE_TICKS:
-                break
+            if odom["count"] != last_seq:            # judge only new samples, never a repeated one
+                last_seq = odom["count"]
+                still = still + 1 if abs(odom["v"]) < SETTLE_LINEAR and abs(odom["w"]) < SETTLE_ANGULAR else 0
+                if still >= SETTLE_SAMPLES:
+                    return
+            if time.monotonic() - t0 > SETTLE_MAX_S:
+                raise Abort(f"robot not confirmed still within {SETTLE_MAX_S:.0f} s {label} "
+                            f"(measured v={odom['v']:.3f} m/s, w={odom['w']:.3f} rad/s)")
 
     def move_leg(cycle, state, target_s, direction, heading_ref):
-        """Drive straight (v = 0.06, w = 0, no correction) until s reaches target_s within tolerance."""
+        """Drive straight (v = 0.10, w = 0, no correction) until s reaches target_s within tolerance."""
         print(f"[{state}] cycle {cycle}: toward s = {target_s:.2f} m")
         t0 = time.monotonic()
         t_next = t0 + period
@@ -242,7 +258,7 @@ def main():
             send(LINEAR_SPEED_MPS, 0.0)
             t_next = wait_tick(t_next)
         duration = time.monotonic() - t0
-        settle(cycle, heading_ref)
+        settle(cycle, heading_ref, f"after {state}")
         s, lateral = project()
         heading_error = math.degrees(wrap_angle(heading_ref - odom["yaw"]))
         print(f"[{state}] stopped at s = {s:.3f} m (error {s - target_s:+.3f} m), lateral {lateral:+.3f} m, "
@@ -273,13 +289,40 @@ def main():
             log_tick("ROTATE_180", cycle, target_heading, 0.0, w)
             send(0.0, w)
             t_next = wait_tick(t_next)
+        print(f"[ROTATE_180] loop ended at heading {math.degrees(odom['yaw']):.1f} deg after "
+              f"{time.monotonic() - t0:.1f} s")
+        settle(cycle, target_heading, "after turn")
+        first_error = math.degrees(wrap_angle(target_heading - odom["yaw"]))
+        corrections = 0
+        while True:
+            error = wrap_angle(target_heading - odom["yaw"])
+            print(f"[HEADING] after settling ({corrections} correction(s)): heading "
+                  f"{math.degrees(odom['yaw']):.1f} deg, error {math.degrees(error):+.1f} deg")
+            if abs(error) <= TURN_TOLERANCE:
+                break
+            if corrections >= MAX_CORRECTIONS:
+                raise Abort(f"heading error {math.degrees(error):+.1f} deg after {corrections} corrective "
+                            "turns; not starting the next leg")
+            corrections += 1
+            # Open-loop pulse sized from the settled error; the next settle measures the result.
+            w = math.copysign(CORRECTION_RATE, error)
+            pulse = min(abs(error) / CORRECTION_RATE, CORRECTION_MAX_PULSE_S)
+            print(f"[CORRECT_TURN] {corrections}/{MAX_CORRECTIONS}: {w:+.2f} rad/s for {pulse:.2f} s")
+            p0 = time.monotonic()
+            t_next = p0 + period
+            while time.monotonic() - p0 < pulse:
+                log_tick("CORRECT_TURN", cycle, target_heading, 0.0, w)
+                send(0.0, w)
+                t_next = wait_tick(t_next)
+            send(0.0)
+            settle(cycle, target_heading, "after corrective turn")
         duration = time.monotonic() - t0
-        settle(cycle, target_heading)
         rotated = odom["unwrapped"] - start_unwrapped
-        final_error = math.degrees(wrap_angle(target_heading - odom["yaw"]))
-        print(f"[ROTATE_180] rotated {math.degrees(rotated):.1f} deg in {duration:.1f} s, "
-              f"heading error after settling {final_error:+.1f} deg")
-        return {"turn_rotation_deg": math.degrees(rotated), "turn_final_error_deg": final_error,
+        final_error = math.degrees(error)
+        print(f"[ROTATE_180] rotated {math.degrees(rotated):.1f} deg in {duration:.1f} s, error after first "
+              f"settling {first_error:+.1f} deg, final error {final_error:+.1f} deg, {corrections} correction(s)")
+        return {"turn_rotation_deg": math.degrees(rotated), "turn_error_after_settle_deg": first_error,
+                "turn_corrections": corrections, "turn_final_error_deg": final_error,
                 "turn_duration_s": duration}
 
     try:

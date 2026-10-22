@@ -1,0 +1,11 @@
+{
+  "completed": false,
+  "distance_traveled_m": 9.246248493199522,
+  "episode": 5,
+  "episode_duration_s": 61.318750192411244,
+  "interruption_reason": "Ctrl+C or evaluator shutdown",
+  "mean_fps": 0.8770358306188925,
+  "n_fresh_observations": 52,
+  "policy_name": "moving_obs",
+  "policy_type": "adaptive"
+}
