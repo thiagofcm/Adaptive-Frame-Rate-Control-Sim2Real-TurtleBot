@@ -115,6 +115,14 @@ if PPO_STATE_DIM != ADAPTIVE_OBS_DIM:
     )
 
 RAW_SCAN_TOPIC = "/robot1/scan"
+# Topic defaults when neither --namespace nor the individual flags are given.
+ROBOT_TOPIC_DEFAULTS = {
+    "raw_scan_topic": RAW_SCAN_TOPIC,
+    "gated_scan_topic": "/robot1/scan_gated",
+    "cmd_vel_topic": REAL_TOPIC_VELO,
+    "odom_topic": REAL_TOPIC_ODOM,
+    "led_topic": DEFAULT_LED_TOPIC,
+}
 GOAL_TOPIC = "/goal_pose"
 RECORD_INTERVAL_S = 0.1
 
@@ -1048,21 +1056,16 @@ def main():
     )
 
     parser.add_argument(
-        "--raw-scan-topic",
-        default=RAW_SCAN_TOPIC,
+        "--namespace",
+        default=None,
+        help="Robot namespace, e.g. robot3: sets /<ns>/scan, /<ns>/scan_gated, /<ns>/odom, "
+        "/<ns>/cmd_vel_unstamped and /<ns>/hmi/led unless those flags are given "
+        "(default: the robot1 topics)",
     )
-    parser.add_argument(
-        "--gated-scan-topic",
-        default="/robot1/scan_gated",
-    )
-    parser.add_argument(
-        "--cmd-vel-topic",
-        default=REAL_TOPIC_VELO,
-    )
-    parser.add_argument(
-        "--odom-topic",
-        default=REAL_TOPIC_ODOM,
-    )
+    parser.add_argument("--raw-scan-topic", default=None)
+    parser.add_argument("--gated-scan-topic", default=None)
+    parser.add_argument("--cmd-vel-topic", default=None)
+    parser.add_argument("--odom-topic", default=None)
     parser.add_argument(
         "--goal-topic",
         default=GOAL_TOPIC,
@@ -1103,8 +1106,9 @@ def main():
     )
     parser.add_argument(
         "--led-topic",
-        default=DEFAULT_LED_TOPIC,
-        help="TurtleBot4 user LED topic for the sensing-rate LED (default: %(default)s)",
+        default=None,
+        help="TurtleBot4 user LED topic for the sensing-rate LED "
+        f"(default: <namespace>/hmi/led, or {DEFAULT_LED_TOPIC})",
     )
     parser.add_argument(
         "--no-led",
@@ -1113,6 +1117,18 @@ def main():
     )
 
     args, ros_args = parser.parse_known_args()
+    # --namespace fills in the robot-specific topics that were not given explicitly;
+    # without it the previous (robot1) defaults are used.
+    if args.namespace:
+        ns = "/" + args.namespace.strip("/")
+        for name, suffix in (("raw_scan_topic", "scan"), ("gated_scan_topic", "scan_gated"),
+                             ("odom_topic", "odom"), ("cmd_vel_topic", "cmd_vel_unstamped"),
+                             ("led_topic", "hmi/led")):
+            if getattr(args, name) is None:
+                setattr(args, name, f"{ns}/{suffix}")
+    for name, default in ROBOT_TOPIC_DEFAULTS.items():
+        if getattr(args, name) is None:
+            setattr(args, name, default)
 
     if not os.path.isfile(args.adaptive_model):
         raise SystemExit(

@@ -57,6 +57,16 @@ def absolute_topic(name):
     return "/" + name.lstrip("/")
 
 
+# Topic defaults when neither --namespace nor the individual flags are given.
+ROBOT_TOPIC_DEFAULTS = {
+    "raw_scan_topic": RAW_SCAN_TOPIC,
+    "gated_scan_topic": absolute_topic("robot1/scan_gated"),
+    "odom_topic": absolute_topic(REAL_TOPIC_ODOM),
+    "cmd_vel_topic": absolute_topic(REAL_TOPIC_VELO),
+    "led_topic": DEFAULT_LED_TOPIC,
+}
+
+
 def default_output_root():
     return str(Path(os.environ["DRLNAV_BASE_PATH"]) / "RealRobot" / "eval")
 
@@ -489,18 +499,35 @@ def main():
         help="Evaluator-owned episode timeout in seconds",
     )
     parser.add_argument("--output-root", default=default_output_root())
-    parser.add_argument("--raw-scan-topic", default=RAW_SCAN_TOPIC)
-    parser.add_argument("--gated-scan-topic", default=absolute_topic("robot1/scan_gated"))
-    parser.add_argument("--odom-topic", default=absolute_topic(REAL_TOPIC_ODOM))
+    parser.add_argument("--namespace", default=None,
+                        help="Robot namespace, e.g. robot3: sets /<ns>/scan, /<ns>/scan_gated, /<ns>/odom, "
+                             "/<ns>/cmd_vel_unstamped and /<ns>/hmi/led unless those flags are given "
+                             "(default: the robot1 topics)")
+    parser.add_argument("--raw-scan-topic", default=None)
+    parser.add_argument("--gated-scan-topic", default=None)
+    parser.add_argument("--odom-topic", default=None)
     parser.add_argument("--goal-topic", default=GOAL_TOPIC)
-    parser.add_argument("--cmd-vel-topic", default=absolute_topic(REAL_TOPIC_VELO))
+    parser.add_argument("--cmd-vel-topic", default=None)
     parser.add_argument("--step-service", default="/step_comm")
     parser.add_argument("--goal-service", default="/goal_comm")
-    parser.add_argument("--led-topic", default=DEFAULT_LED_TOPIC,
-                        help="TurtleBot4 user LED topic for the sensing-rate LED")
+    parser.add_argument("--led-topic", default=None,
+                        help="TurtleBot4 user LED topic for the sensing-rate LED "
+                             f"(default: <namespace>/hmi/led, or {DEFAULT_LED_TOPIC})")
     parser.add_argument("--no-led", action="store_true",
                         help="Do not show the sensing rate on the TurtleBot4 LED")
     args, ros_args = parser.parse_known_args()
+    # --namespace fills in the robot-specific topics that were not given explicitly;
+    # without it the previous (robot1) defaults are used.
+    if args.namespace:
+        ns = "/" + args.namespace.strip("/")
+        for name, suffix in (("raw_scan_topic", "scan"), ("gated_scan_topic", "scan_gated"),
+                             ("odom_topic", "odom"), ("cmd_vel_topic", "cmd_vel_unstamped"),
+                             ("led_topic", "hmi/led")):
+            if getattr(args, name) is None:
+                setattr(args, name, f"{ns}/{suffix}")
+    for name, default in ROBOT_TOPIC_DEFAULTS.items():
+        if getattr(args, name) is None:
+            setattr(args, name, default)
 
     if args.episodes <= 0:
         raise SystemExit("--episodes must be greater than zero")

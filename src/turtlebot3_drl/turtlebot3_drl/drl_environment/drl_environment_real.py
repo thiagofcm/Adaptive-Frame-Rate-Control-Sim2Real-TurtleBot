@@ -16,6 +16,7 @@
 #
 # Authors: Ryan Shim, Gilbert, Tomas
 
+import argparse
 import math
 import numpy
 import sys
@@ -82,7 +83,7 @@ def real_scan_beam_indices(msg):
 
 
 class DRLEnvironment(Node):
-    def __init__(self):
+    def __init__(self, namespace=None):
         super().__init__('drl_environment')
         print(f"running on real stage")
         print(
@@ -90,10 +91,18 @@ class DRLEnvironment(Node):
             f"collision={REAL_THRESHOLD_COLLISION:.3f} m"
         )
 
-        self.scan_topic = REAL_TOPIC_SCAN
-        self.velo_topic = REAL_TOPIC_VELO
-        self.odom_topic = REAL_TOPIC_ODOM
+        if namespace:
+            # Same names the evaluators derive from --namespace.
+            ns = "/" + namespace.strip("/")
+            self.scan_topic = f"{ns}/scan_gated"
+            self.velo_topic = f"{ns}/cmd_vel_unstamped"
+            self.odom_topic = f"{ns}/odom"
+        else:
+            self.scan_topic = REAL_TOPIC_SCAN
+            self.velo_topic = REAL_TOPIC_VELO
+            self.odom_topic = REAL_TOPIC_ODOM
         self.goal_topic = 'goal_pose'
+        print(f"topics: scan {self.scan_topic}, odom {self.odom_topic}, cmd_vel {self.velo_topic}")
 
         self.goal_x, self.goal_y = 0.0, 0.0
         self.robot_x, self.robot_y = 0.0, 0.0
@@ -294,13 +303,16 @@ class DRLEnvironment(Node):
             print(f"MinD: {self.obstacle_distance:<8.2f}Alin: {request.action[LINEAR]:<7.1f}Aturn: {request.action[ANGULAR]:<7.1f}")
         return response
 
-def main(args=sys.argv[1:]):
-    rclpy.init(args=args)
-    if len(args) == 0:
-        drl_environment = DRLEnvironment()
-    else:
-        rclpy.shutdown()
-        quit("ERROR: wrong number of arguments!")
+def main(args=None):
+    from rclpy.utilities import remove_ros_args
+    argv = sys.argv if args is None else ["real_environment"] + list(args)
+    parser = argparse.ArgumentParser(prog="real_environment")
+    parser.add_argument("--namespace", default=None,
+                        help="Robot namespace, e.g. robot3: uses <ns>/scan_gated, <ns>/odom and "
+                             "<ns>/cmd_vel_unstamped instead of the topics in settings.py")
+    options = parser.parse_args(remove_ros_args(args=argv)[1:])
+    rclpy.init(args=argv)
+    drl_environment = DRLEnvironment(namespace=options.namespace)
     rclpy.spin(drl_environment)
     drl_environment.destroy()
     rclpy.shutdown()
