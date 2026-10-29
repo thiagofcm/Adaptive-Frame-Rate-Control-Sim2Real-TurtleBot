@@ -13,15 +13,16 @@ Runtime architecture
     -> DrlStep action
     -> real_environment publishes cmd_vel
 
-The recurrent PPO adaptive policy runs at 10 Hz wall time.  It observes the
-canonical 43-D Gazebo observation (adaptive_obs.py):
+The recurrent PPO adaptive policy runs at 5 Hz wall time, the control rate of
+the simplified training env (TurtleBot_VarScanRate, control_dt = 0.2 s).  It
+observes the canonical 43-D observation (adaptive_obs.py):
     [40 held LiDAR rays, fps_ratio, obs_age_ratio, frame_count_ratio]
 and chooses one of:
-    [0.2, 0.5, 1.0, 5.0, 10.0] Hz
+    [0.2, 0.5, 1.0, 2.5, 5.0] Hz
 
-As in the Gazebo AdaptiveFPSEnv, PPO produces an action every 0.1 s, but that
-action becomes causal only if a fresh gated LiDAR frame is consumed during
-that PPO interval.  The selected FPS then controls the NEXT sensing interval.
+As in the training env, PPO produces an action every 0.2 s, but that action
+becomes causal only if a fresh gated LiDAR frame is consumed during that PPO
+interval.  The selected FPS then controls the NEXT sensing interval.
 
 IMPORTANT
 ---------
@@ -66,7 +67,6 @@ from turtlebot3_drl.common.storagemanager import StorageManager
 from turtlebot3_drl.common.settings import (
     ENABLE_BACKWARD,
     ENABLE_STACKING,
-    EPISODE_TIMEOUT_SECONDS,
     REAL_N_SCAN_SAMPLES,
     REAL_SPEED_ANGULAR_MAX,
     REAL_SPEED_LINEAR_MAX,
@@ -95,13 +95,21 @@ from adaptive_obs import (
 # ---------------------------------------------------------------------------
 # Experiment constants: must match training.
 # ---------------------------------------------------------------------------
-FPS_CHOICES = [0.2, 0.5, 1.0, 5.0, 10.0]
-PPO_RATE_HZ = 10.0
+# TurtleBot_VarScanRate: fps_choices=(0.2, 0.5, 1.0, 2.5, 5.0), control_dt=0.2.
+FPS_CHOICES = [0.2, 0.5, 1.0, 2.5, 5.0]
+PPO_RATE_HZ = 5.0
 PPO_DT = 1.0 / PPO_RATE_HZ
 
-# Gazebo AdaptiveFPSEnv._max_obs_interval: observation age is counted in PPO
-# steps; slowest choice 0.2 Hz -> 10 / 0.2 = 50 PPO steps (5 s).
+# Training env max_obs_interval: observation age is counted in PPO steps;
+# slowest choice 0.2 Hz -> 5 / 0.2 = 25 PPO steps, i.e. still 5 s.
 MAX_OBS_AGE_STEPS = PPO_RATE_HZ / min(FPS_CHOICES)
+if not math.isclose(MAX_OBS_AGE_STEPS * PPO_DT, 5.0):
+    raise RuntimeError(
+        f"obs_age_ratio must saturate at 5 s, got {MAX_OBS_AGE_STEPS * PPO_DT} s"
+    )
+
+# Training env episode length: max_episode_steps 350 x control_dt 0.2 s.
+ADAPTIVE_EPISODE_TIMEOUT_SECONDS = 70.0
 
 # The TD3 navigation state stays 44-D. The PPO observation is the canonical
 # 43-D one: the 40 held LiDAR rays (first entries of the TD3 state) + 3 features.
@@ -710,10 +718,10 @@ class RealAdaptiveEvaluator(Node):
                 f"got {len(nav_state)}"
             )
 
-        # Logical PPO-selected rate (not the delivered LiDAR rate): 10 Hz -> 1.0.
+        # Logical PPO-selected rate (not the delivered LiDAR rate): 5 Hz -> 1.0.
         fps_ratio = self.current_fps / PPO_RATE_HZ
 
-        # PPO steps since the last consumed fresh scan / 50, as in Gazebo.
+        # PPO steps since the last consumed fresh scan / 25 (5 s), as in training.
         obs_age_ratio = float(
             np.clip(steps_since_last_obs / MAX_OBS_AGE_STEPS, 0.0, 1.0)
         )
@@ -742,8 +750,8 @@ class RealAdaptiveEvaluator(Node):
     def run_episode(self, episode_index, max_episode_seconds):
         goal = self.wait_for_manual_goal()
 
-        # Start every episode at the fastest adaptive action, matching reset()
-        # in the Gazebo AdaptiveFPSEnv.
+        # Start every episode at the fastest adaptive action (5 Hz), matching
+        # reset() in the training env.
         self.current_fps = max(FPS_CHOICES)
         self.period = 1.0 / self.current_fps
         self.next_sample_time = None
@@ -840,7 +848,7 @@ class RealAdaptiveEvaluator(Node):
                 }
 
             # --------------------------------------------------------------
-            # PPO decision at 10 Hz.
+            # PPO decision at 5 Hz.
             # IMPORTANT: recurrent state advances EVERY PPO step, even if no
             # fresh observation arrives in this interval.
             # --------------------------------------------------------------
@@ -864,7 +872,7 @@ class RealAdaptiveEvaluator(Node):
 
             # --------------------------------------------------------------
             # Navigation controller continues at its normal real-agent rate
-            # inside this 0.1-s PPO window.
+            # inside this 0.2-s PPO window.
             # --------------------------------------------------------------
             while rclpy.ok() and not done:
                 inner_ticks += 1
@@ -950,7 +958,7 @@ class RealAdaptiveEvaluator(Node):
 
             ppo_step += 1
 
-            # PPO observation for the NEXT 10-Hz recurrent decision.
+            # PPO observation for the NEXT 5-Hz recurrent decision.
             (
                 ppo_obs,
                 fps_ratio,
@@ -962,7 +970,7 @@ class RealAdaptiveEvaluator(Node):
 
             if (
                 self.diagnose_probs
-                and ppo_step % 10 == 0
+                and ppo_step % int(PPO_RATE_HZ) == 0   # about once per second
             ):
                 elapsed = time.monotonic() - episode_start
                 print(
@@ -1088,8 +1096,9 @@ def main():
         "--max-episode-seconds",
         dest="timeout_seconds",
         type=float,
-        default=EPISODE_TIMEOUT_SECONDS,
-        help="Evaluator-owned timeout in seconds",
+        default=ADAPTIVE_EPISODE_TIMEOUT_SECONDS,
+        help="Evaluator-owned timeout in seconds (default: %(default)s, the "
+        "training episode length)",
     )
 
     parser.add_argument(

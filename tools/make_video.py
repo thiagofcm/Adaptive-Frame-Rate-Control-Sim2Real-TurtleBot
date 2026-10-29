@@ -61,7 +61,10 @@ except ImportError:
 # Keep the same discrete viridis sensing-rate convention used by the
 # F1TENTH/Lunar-Lander AdaptiveFPS plots: low rates are dark/purple and
 # higher rates progress through viridis toward yellow.
-FPS_CHOICES = [0.2, 0.5, 1.0, 5.0, 10.0]
+FPS_CHOICES = [0.2, 0.5, 1.0, 2.5, 5.0]
+# Rate set of the earlier 10-Hz-control policies, kept so older recordings
+# (e.g. fixed_10Hz) still render with their own legend.
+LEGACY_FPS_CHOICES = [0.2, 0.5, 1.0, 5.0, 10.0]
 
 # Display-only rotation of the whole plot, clockwise in degrees (90 = turned
 # 90 degrees to the right). Recorded data is not changed. Set to 0 to disable.
@@ -132,14 +135,31 @@ def pick_step_time_column(steps, timebase):
     return None
 
 
-def validate_fps_values(values, source):
+def _outside(values, choices):
     present = np.asarray(values, dtype=float)
-    unexpected = sorted({float(v) for v in np.unique(present)
-                         if not any(np.isclose(v, choice) for choice in FPS_CHOICES)})
+    return sorted({float(v) for v in np.unique(present)
+                   if not any(np.isclose(v, choice) for choice in choices)})
+
+
+def episode_fps_choices(meta, values):
+    """Discrete rate set for the legend: the episode's recorded
+    fps_action_choices (adaptive real-robot episodes), else the first known
+    set (current, then legacy) that contains every recorded current_fps."""
+    recorded = meta.get("fps_action_choices")
+    if recorded:
+        return [float(f) for f in recorded]
+    for choices in (FPS_CHOICES, LEGACY_FPS_CHOICES):
+        if not _outside(values, choices):
+            return list(choices)
+    return list(FPS_CHOICES)
+
+
+def validate_fps_values(values, source, choices=FPS_CHOICES):
+    unexpected = _outside(values, choices)
     if unexpected:
         raise ValueError(
             f"{source}: current_fps contains values outside the valid discrete "
-            f"choices {FPS_CHOICES}: {unexpected}"
+            f"choices {list(choices)}: {unexpected}"
         )
 
 
@@ -311,11 +331,12 @@ def main():
         step_x = steps["x"].to_numpy(dtype=float)
         step_y = steps["y"].to_numpy(dtype=float)
         step_fps = steps["current_fps"].to_numpy(dtype=float)
-        validate_fps_values(step_fps, os.path.join(episode_dir, "step.csv/steps.csv"))
-        fps_cmap = matplotlib.colormaps["viridis"].resampled(len(FPS_CHOICES))
-        fps_norm = BoundaryNorm(np.arange(len(FPS_CHOICES) + 1) - 0.5, fps_cmap.N)
+        fps_choices = episode_fps_choices(meta, step_fps)
+        validate_fps_values(step_fps, os.path.join(episode_dir, "step.csv/steps.csv"), fps_choices)
+        fps_cmap = matplotlib.colormaps["viridis"].resampled(len(fps_choices))
+        fps_norm = BoundaryNorm(np.arange(len(fps_choices) + 1) - 0.5, fps_cmap.N)
         fps_index = np.array([
-            next(i for i, choice in enumerate(FPS_CHOICES) if np.isclose(v, choice))
+            next(i for i, choice in enumerate(fps_choices) if np.isclose(v, choice))
             for v in step_fps
         ])
     else:
@@ -400,9 +421,9 @@ def main():
     if steps is not None:
         fps_scatter = ax.scatter([], [], c=[], cmap=fps_cmap, norm=fps_norm,
                                  s=16, alpha=0.95, edgecolors="none", zorder=4)
-        cbar = fig.colorbar(fps_scatter, ax=ax, ticks=range(len(FPS_CHOICES)),
+        cbar = fig.colorbar(fps_scatter, ax=ax, ticks=range(len(fps_choices)),
                             fraction=0.046, pad=0.04)
-        cbar.ax.set_yticklabels([f"{fps:g} Hz" for fps in FPS_CHOICES])
+        cbar.ax.set_yticklabels([f"{fps:g} Hz" for fps in fps_choices])
         cbar.set_label("Sensing Rate (Hz)")
     else:
         fps_scatter = None

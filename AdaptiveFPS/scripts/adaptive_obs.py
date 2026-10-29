@@ -4,8 +4,8 @@ The sensing policy sees 43 values, the same definition as the simplified env
 (adaptive_sensor_policy/envs/turtlebot_var_scan_rate.py, _get_augmented_obs):
 
     [0:40]  retained LiDAR scan (the held /scan_gated scan), normalised to [0, 1]
-    [40]    fps_ratio     = current_fps / 10 (control/PPO rate)
-    [41]    obs_age_ratio = age of the retained scan / 5 s (slowest rate's interval), clipped to [0, 1]
+    [40]    fps_ratio     = current_fps / 5 (control/PPO rate, control_dt = 0.2 s)
+    [41]    obs_age_ratio = age of the retained scan / 5 s (slowest rate's interval: 25 PPO steps), clipped to [0, 1]
     [42]    frame_ratio   = episode_scan_count / budget, clipped to [0, 1]
 
 The frame budget is a per-run experiment setting (train_adaptive_fps_ppo.py / eval.py --budget), but it is

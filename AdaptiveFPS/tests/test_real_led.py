@@ -13,7 +13,7 @@ from real_led import (
     SensingLedController,
 )
 
-FPS_CHOICES = [0.2, 0.5, 1.0, 5.0, 10.0]
+FPS_CHOICES = [0.2, 0.5, 1.0, 2.5, 5.0]
 
 
 class FakeLogger:
@@ -86,7 +86,7 @@ class ControllerTest(unittest.TestCase):
     def test_adaptive_sequence_publishes_only_changes(self):
         node = FakeNode()
         led = SensingLedController(node)
-        for fps in [10.0, 10.0, 1.0, 1.0, 0.2, 10.0]:
+        for fps in [5.0, 5.0, 1.0, 1.0, 0.2, 5.0]:
             led.set_blink_rate(fps)
         self.assertEqual([m.blink_period for m in node.publisher.messages], [400, 1000, 2000, 400])
 
@@ -106,6 +106,9 @@ class ControllerTest(unittest.TestCase):
         colors = [m.color for m in node.publisher.messages]
         self.assertEqual(colors, [UserLed.COLOR_OFF, UserLed.COLOR_RED, UserLed.COLOR_OFF, UserLed.COLOR_RED])
 
+    def test_retired_10hz_rate_is_unsupported(self):
+        self.assertNotIn(10.0, SENSING_FPS_TO_LED_PERIOD_MS)
+
     def test_unsupported_fps_is_skipped_without_disabling(self):
         node = FakeNode()
         led = SensingLedController(node)
@@ -118,7 +121,7 @@ class ControllerTest(unittest.TestCase):
     def test_publish_failure_disables_without_raising(self):
         node = FakeNode(fail=True)
         led = SensingLedController(node)
-        self.assertFalse(led.set_blink_rate(10.0))
+        self.assertFalse(led.set_blink_rate(5.0))
         self.assertFalse(led.enabled)
         self.assertFalse(led.turn_off())
         self.assertFalse(led.set_blink_rate(1.0))
@@ -128,7 +131,7 @@ class ControllerTest(unittest.TestCase):
         node = FakeNode()
         led = SensingLedController(node, enabled=False)
         self.assertEqual(node.created, [])
-        self.assertFalse(led.set_blink_rate(10.0))
+        self.assertFalse(led.set_blink_rate(5.0))
         self.assertFalse(led.turn_off())
 
     def test_missing_message_package_disables_without_raising(self):
@@ -136,7 +139,7 @@ class ControllerTest(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"turtlebot4_msgs.msg": None}):
             led = SensingLedController(node)
         self.assertFalse(led.enabled)
-        self.assertFalse(led.set_blink_rate(10.0))
+        self.assertFalse(led.set_blink_rate(5.0))
         self.assertEqual(len(node.logger.warnings), 1)
 
 
@@ -163,7 +166,7 @@ class RosDeliveryTest(unittest.TestCase):
             while not received and time.monotonic() < deadline:
                 rclpy.spin_once(node, timeout_sec=0.05)
             self.assertEqual(len(received), 1)
-            self.assertEqual(received[0].blink_period, 667)
+            self.assertEqual(received[0].blink_period, 400)
             node.destroy_node()
         finally:
             rclpy.shutdown()

@@ -1,0 +1,53 @@
+exp_name: train_adaptive_fps_ppo
+seed: 1
+lidar_seed: 100001
+torch_deterministic: True
+cuda: False
+track: False
+wandb_project_name: cleanRL
+wandb_entity: None
+env_id: TurtleBot_VarScanRate
+scene: corridor_static_object_random
+randomize_static_obstacles: True
+nav_path: runs/navigation_model/target_actor_stage9_episode7400.pt
+total_timesteps: 100000000
+learning_rate: 0.0003
+num_envs: 32
+num_steps: 1024
+lstm_hidden_size: 64
+anneal_lr: False
+gamma: 0.99
+gae_lambda: 0.98
+num_minibatches: 4
+update_epochs: 4
+norm_adv: True
+clip_coef: 0.2
+clip_vloss: True
+ent_coef: 0.05
+vf_coef: 0.5
+max_grad_norm: 0.5
+target_kl: None
+batch_size: 32768
+minibatch_size: 8192
+num_iterations: 3051
+max_episode_steps: 350
+resume_path: None
+checkpoint_interval: 100
+async_envs: True
+budget: 450.0
+budget_penalty: 15.0
+frame_cost: 0.02
+goal_pose_list: ((-1.8, -2.5), (-1.5, -2.5), (-2.1, -2.5), (-1.8, -2.2), (-1.6, -2.3), (-2.0, -2.3), (-1.5, -2.2), (-2.1, -2.2), (-1.8, -2.0))
+run_tag: None
+start_pose: (2.5, 2.5, -2.9441970937399127)  # x, y, yaw
+static_obstacles_randomization_enabled: True
+static_obstacles.LENGTH_RANGE: (0.1, 0.6)
+static_obstacles.THICKNESS_RANGE: (0.15, 0.6)
+static_obstacles.Z1_X_OFFSET_RANGE: (-0.5, 0.0)
+static_obstacles.Z2_X_OFFSET_RANGE: (-0.5, 0.0)
+static_obstacles.Z3_Y_OFFSET_RANGE: (-0.55, 0.0)
+static_obstacles.Z4_Y_OFFSET_RANGE: (-0.55, 0.0)
+static_obstacles.MIN_NOMINAL_CLEARANCE: 0.75
+static_obstacles.MIN_Z1_Z3_DISTANCE: 0.7
+static_obstacles.HARD_PAIR_PROB: 0.5
+static_obstacles.HARD_BAND: 0.05

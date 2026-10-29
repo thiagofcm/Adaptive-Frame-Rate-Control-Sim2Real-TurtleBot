@@ -20,8 +20,8 @@ SENSING_FPS_TO_LED_PERIOD_MS = {
     0.2: 2000,
     0.5: 1333,
     1.0: 1000,
-    5.0: 667,
-    10.0: 400,
+    2.5: 667,
+    5.0: 400,
 }
 LED_DUTY_CYCLE = 0.5
 LED_OFF_BLINK_PERIOD_MS = 1000

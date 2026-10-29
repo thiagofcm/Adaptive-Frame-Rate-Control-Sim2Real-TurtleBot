@@ -1,0 +1,2 @@
+policy_name,mean_fps,std_fps,n_episodes_total,success_rate_percent,mean_duration_s,std_duration_s,mean_distance_traveled_m,std_distance_traveled_m,mean_n_fresh_observations,std_n_fresh_observations
+fixed_5hz,5.000000,0.000000,5,100.000000,39.259393,5.107906,7.676018,0.980293,197.400000,25.657358

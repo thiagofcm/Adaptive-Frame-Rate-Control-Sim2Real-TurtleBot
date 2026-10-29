@@ -27,7 +27,6 @@ from turtlebot3_drl.common import utilities as util
 from turtlebot3_drl.common.settings import (
     ENABLE_BACKWARD,
     ENABLE_STACKING,
-    EPISODE_TIMEOUT_SECONDS,
     REAL_N_SCAN_SAMPLES,
     REAL_SPEED_ANGULAR_MAX,
     REAL_SPEED_LINEAR_MAX,
@@ -483,6 +482,9 @@ class RealFixedEvaluator(Node):
         return self.recorder.finish_episode(outcome)
 
 
+# Same default as real_eval_adaptive.py: training episode length (350 x 0.2 s).
+FIXED_EPISODE_TIMEOUT_SECONDS = 70.0
+
 def main():
     parser = argparse.ArgumentParser(
         description="Fixed-FPS real-robot evaluator with passive recording"
@@ -495,8 +497,9 @@ def main():
     parser.add_argument(
         "--timeout",
         type=float,
-        default=EPISODE_TIMEOUT_SECONDS,
-        help="Evaluator-owned episode timeout in seconds",
+        default=FIXED_EPISODE_TIMEOUT_SECONDS,
+        help="Evaluator-owned episode timeout in seconds (default: %(default)s, "
+        "the adaptive training episode length)",
     )
     parser.add_argument("--output-root", default=default_output_root())
     parser.add_argument("--namespace", default=None,
