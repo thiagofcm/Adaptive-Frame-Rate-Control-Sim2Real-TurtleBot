@@ -1,0 +1,185 @@
+{
+  "experiment": "angular_step_response",
+  "namespace": "robot1",
+  "cmd_topic": "/robot1/cmd_vel_unstamped",
+  "odom_topic": "/robot1/odom",
+  "cmd_qos": "best_effort, keep last 10",
+  "odom_qos": "sensor_data",
+  "command_rate_hz": 5.0,
+  "sequence": [
+    [
+      "BASELINE",
+      2.0,
+      0.0
+    ],
+    [
+      "POS_LOW",
+      3.0,
+      0.2
+    ],
+    [
+      "POS_MED",
+      3.0,
+      0.4
+    ],
+    [
+      "POS_HIGH",
+      3.0,
+      0.6
+    ],
+    [
+      "POS_DECEL",
+      3.0,
+      0.2
+    ],
+    [
+      "STOP_1",
+      2.0,
+      0.0
+    ],
+    [
+      "NEG_LOW",
+      3.0,
+      -0.2
+    ],
+    [
+      "NEG_MED",
+      3.0,
+      -0.4
+    ],
+    [
+      "NEG_HIGH",
+      3.0,
+      -0.6
+    ],
+    [
+      "NEG_DECEL",
+      3.0,
+      -0.2
+    ],
+    [
+      "STOP_2",
+      2.0,
+      0.0
+    ],
+    [
+      "REV_POS",
+      2.0,
+      0.4
+    ],
+    [
+      "REV_NEG",
+      2.0,
+      -0.4
+    ],
+    [
+      "FINAL_STOP",
+      2.0,
+      0.0
+    ]
+  ],
+  "phase_ticks": [
+    [
+      "BASELINE",
+      10,
+      0.0
+    ],
+    [
+      "POS_LOW",
+      15,
+      0.2
+    ],
+    [
+      "POS_MED",
+      15,
+      0.4
+    ],
+    [
+      "POS_HIGH",
+      15,
+      0.6
+    ],
+    [
+      "POS_DECEL",
+      15,
+      0.2
+    ],
+    [
+      "STOP_1",
+      10,
+      0.0
+    ],
+    [
+      "NEG_LOW",
+      15,
+      -0.2
+    ],
+    [
+      "NEG_MED",
+      15,
+      -0.4
+    ],
+    [
+      "NEG_HIGH",
+      15,
+      -0.6
+    ],
+    [
+      "NEG_DECEL",
+      15,
+      -0.2
+    ],
+    [
+      "STOP_2",
+      10,
+      0.0
+    ],
+    [
+      "REV_POS",
+      10,
+      0.4
+    ],
+    [
+      "REV_NEG",
+      10,
+      -0.4
+    ],
+    [
+      "FINAL_STOP",
+      10,
+      0.0
+    ]
+  ],
+  "planned_duration_s": 36.0,
+  "cmd_linear_mps": 0.0,
+  "max_angular_radps": 0.6,
+  "max_rotation_rad": 6.283185307179586,
+  "max_translation_m": 0.25,
+  "max_duration_s": 60.0,
+  "clock": "t_s = time.monotonic() - start of recording",
+  "outcome": "ABORTED: robot moved more than 0.25 m from the start",
+  "other_cmd_publishers": [],
+  "start_pose": {
+    "x": 11.190717697143555,
+    "y": -1.8416748046875,
+    "yaw": 2.6270641315968795,
+    "yaw_unwrapped": 2.6270641315968795
+  },
+  "run": "angular_run_5",
+  "started": "2026-11-02T23:19:07",
+  "t0_ros_time_s": 1793661547.37027,
+  "abort_reason": "robot moved more than 0.25 m from the start",
+  "odometry_messages": 452,
+  "command_ticks": 112,
+  "late_ticks": 0,
+  "max_tick_lateness_s": 0.0002838664222508669,
+  "final_pose": {
+    "x": 11.04395580291748,
+    "y": -2.0512006282806396,
+    "yaw": -2.320316312304222,
+    "yaw_unwrapped": 3.9628689948753637
+  },
+  "net_rotation_rad": 1.3358048632784842,
+  "total_rotation_traveled_rad": 3.6680858029047543,
+  "final_displacement_m": 0.25581267433262345
+}

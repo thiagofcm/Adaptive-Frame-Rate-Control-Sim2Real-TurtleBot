@@ -1,0 +1,57 @@
+{
+  "namespace": "robot1",
+  "cmd_topic": "/robot1/cmd_vel_unstamped",
+  "odom_topic": "/robot1/odom",
+  "cmd_qos": "best_effort, keep last 10",
+  "odom_qos": "sensor_data",
+  "command_rate_hz": 5.0,
+  "schedule": [
+    [
+      "V010_ACCEL",
+      0.0,
+      0.1
+    ],
+    [
+      "V015",
+      0.4,
+      0.15
+    ],
+    [
+      "V020",
+      0.8,
+      0.2
+    ],
+    [
+      "V010_DECEL",
+      1.4,
+      0.1
+    ],
+    [
+      "STOP",
+      1.95,
+      0.0
+    ]
+  ],
+  "max_linear_mps": 0.2,
+  "pre_roll_s": 1.0,
+  "settle_s": 3.0,
+  "max_distance_m": 2.3,
+  "max_duration_s": 40.0,
+  "clock": "t_s = time.monotonic() - start of recording",
+  "outcome": "COMPLETED",
+  "other_cmd_publishers": [],
+  "start_pose": {
+    "x": 5.885919094085693,
+    "y": -0.4589150547981262,
+    "yaw": -0.06848163845911474
+  },
+  "run": "run_3",
+  "started": "2026-11-02T22:52:06",
+  "t0_ros_time_s": 1793659926.7960181,
+  "final_forward_m": 1.9753900090532233,
+  "final_lateral_m": -0.037809617116075694,
+  "odometry_messages": 424,
+  "command_ticks": 108,
+  "late_ticks": 0,
+  "max_tick_lateness_s": 0.00024911086075007915
+}

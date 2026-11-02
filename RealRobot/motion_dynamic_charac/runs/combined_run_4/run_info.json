@@ -1,0 +1,253 @@
+{
+  "experiment": "combined_motion_response",
+  "mode": "constant_curvature",
+  "namespace": "robot1",
+  "cmd_topic": "/robot1/cmd_vel_unstamped",
+  "odom_topic": "/robot1/odom",
+  "cmd_qos": "best_effort, keep last 10",
+  "odom_qos": "sensor_data",
+  "command_rate_hz": 5.0,
+  "sequence": [
+    [
+      "C1_BASELINE",
+      2.0,
+      0.0,
+      0.0
+    ],
+    [
+      "C2_LEFT_R050",
+      4.0,
+      0.15,
+      0.3
+    ],
+    [
+      "C3_STOP",
+      2.0,
+      0.0,
+      0.0
+    ],
+    [
+      "C4_RIGHT_R050",
+      4.0,
+      0.15,
+      -0.3
+    ],
+    [
+      "C5_STOP",
+      2.0,
+      0.0,
+      0.0
+    ],
+    [
+      "C6_LEFT_R030",
+      4.0,
+      0.15,
+      0.5
+    ],
+    [
+      "C7_STOP",
+      2.0,
+      0.0,
+      0.0
+    ],
+    [
+      "C8_RIGHT_R030",
+      4.0,
+      0.15,
+      -0.5
+    ],
+    [
+      "C9_FINAL_STOP",
+      3.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "phase_ticks": [
+    [
+      "C1_BASELINE",
+      10,
+      0.0,
+      0.0
+    ],
+    [
+      "C2_LEFT_R050",
+      20,
+      0.15,
+      0.3
+    ],
+    [
+      "C3_STOP",
+      10,
+      0.0,
+      0.0
+    ],
+    [
+      "C4_RIGHT_R050",
+      20,
+      0.15,
+      -0.3
+    ],
+    [
+      "C5_STOP",
+      10,
+      0.0,
+      0.0
+    ],
+    [
+      "C6_LEFT_R030",
+      20,
+      0.15,
+      0.5
+    ],
+    [
+      "C7_STOP",
+      10,
+      0.0,
+      0.0
+    ],
+    [
+      "C8_RIGHT_R030",
+      20,
+      0.15,
+      -0.5
+    ],
+    [
+      "C9_FINAL_STOP",
+      15,
+      0.0,
+      0.0
+    ]
+  ],
+  "planned_commands": 135,
+  "planned_duration_s": 27.0,
+  "max_linear_mps": 0.2,
+  "max_angular_radps": 0.6,
+  "ideal_phase_ends_start_frame": [
+    {
+      "phase": "C1_BASELINE",
+      "x": 0.0,
+      "y": 0.0,
+      "theta_rad": 0.0,
+      "theta_deg": 0.0,
+      "distance_m": 0.0
+    },
+    {
+      "phase": "C2_LEFT_R050",
+      "x": 0.466019542983612,
+      "y": 0.31882112276165997,
+      "theta_rad": 1.1999999999999935,
+      "theta_deg": 68.75493541569841,
+      "distance_m": 0.5646424733950325
+    },
+    {
+      "phase": "C3_STOP",
+      "x": 0.466019542983612,
+      "y": 0.31882112276165997,
+      "theta_rad": 1.1999999999999935,
+      "theta_deg": 68.75493541569841,
+      "distance_m": 0.5646424733950325
+    },
+    {
+      "phase": "C4_RIGHT_R050",
+      "x": 0.9320390859672235,
+      "y": 0.6376422455233195,
+      "theta_rad": -1.8648277366750676e-16,
+      "theta_deg": -1.0684675883041501e-14,
+      "distance_m": 1.1292849467900645
+    },
+    {
+      "phase": "C5_STOP",
+      "x": 0.9320390859672235,
+      "y": 0.6376422455233195,
+      "theta_rad": -1.8648277366750676e-16,
+      "theta_deg": -1.0684675883041501e-14,
+      "distance_m": 1.1292849467900645
+    },
+    {
+      "phase": "C6_LEFT_R030",
+      "x": 1.2048283140149283,
+      "y": 1.0624862964874564,
+      "theta_rad": 1.9999999999999791,
+      "theta_deg": 114.59155902616345,
+      "distance_m": 1.606389864408913
+    },
+    {
+      "phase": "C7_STOP",
+      "x": 1.2048283140149283,
+      "y": 1.0624862964874564,
+      "theta_rad": 1.9999999999999791,
+      "theta_deg": 114.59155902616345,
+      "distance_m": 1.606389864408913
+    },
+    {
+      "phase": "C8_RIGHT_R030",
+      "x": 1.4776175420626323,
+      "y": 1.4873303474515955,
+      "theta_rad": -3.7643499428696714e-16,
+      "theta_deg": -2.1568136433674472e-14,
+      "distance_m": 2.096546007857137
+    },
+    {
+      "phase": "C9_FINAL_STOP",
+      "x": 1.4776175420626323,
+      "y": 1.4873303474515955,
+      "theta_rad": -3.7643499428696714e-16,
+      "theta_deg": -2.1568136433674472e-14,
+      "distance_m": 2.096546007857137
+    }
+  ],
+  "ideal_max_distance_m": 2.096546007857137,
+  "ideal_bbox_start_frame": [
+    0.0,
+    1.4776175420626323,
+    0.0,
+    1.4873303474515955
+  ],
+  "ideal_max_rotation_rad": 1.9999999999999791,
+  "safe_box_start_frame": [
+    -0.5,
+    1.9776175420626323,
+    -0.5,
+    1.9873303474515955
+  ],
+  "safe_radius_m": 2.596546007857137,
+  "max_rotation_rad": 2.999999999999979,
+  "max_duration_s": 37.0,
+  "margin_m": 0.5,
+  "start_frame": "x_s forward and y_s left of the starting pose; rotation_rad = unwrapped yaw change",
+  "clock": "t_s = time.monotonic() - start of recording",
+  "completed": true,
+  "outcome": "COMPLETED",
+  "abort_reason": null,
+  "other_cmd_publishers": [],
+  "start_pose": {
+    "x": 13.527641296386719,
+    "y": -5.231788635253906,
+    "yaw": -1.9191184921322948,
+    "yaw_unwrapped": -1.9191184921322948,
+    "x_s": -0.0,
+    "y_s": 0.0,
+    "rotation_rad": 0.0
+  },
+  "run": "combined_run_4",
+  "started": "2026-11-02T23:41:24",
+  "t0_ros_time_s": 1793662884.964515,
+  "odometry_messages": 544,
+  "command_ticks": 135,
+  "late_ticks": 0,
+  "max_tick_lateness_s": 0.0011639391304925084,
+  "duration_s": 27.143443210050464,
+  "final_pose": {
+    "x": 13.714921951293945,
+    "y": -7.132501125335693,
+    "yaw": -2.3308810619775144,
+    "yaw_unwrapped": -2.3308810619775144,
+    "x_s": 1.7226456030613209,
+    "y_s": 0.8247873301093351,
+    "rotation_rad": -0.41176256984521964
+  },
+  "final_displacement_m": 1.9099167556873748,
+  "final_heading_change_rad": -0.41176256984521964,
+  "max_distance_from_start_m": 1.9103234464328702
+}
