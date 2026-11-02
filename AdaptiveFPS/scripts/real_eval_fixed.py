@@ -44,6 +44,7 @@ from turtlebot3_drl.drl_environment.drl_environment_real import (
 )
 
 from real_episode_recorder import RealEpisodeRecorder
+from real_nav_state import nav_state, scan_rays
 from real_led import DEFAULT_LED_TOPIC, SensingLedController
 
 
@@ -122,6 +123,7 @@ class RealFixedEvaluator(Node):
         self.raw_scan_count = 0
         self.gated_scan_count = 0
         self.latest_goal = None
+        self.last_scan_rays = None
         self.goal_message_count = 0
         self.consumed_goal_message_count = 0
         self.record_cmd_linear = 0.0
@@ -199,6 +201,8 @@ class RealFixedEvaluator(Node):
         self.nav_model = self.sm.load_model()
         self.nav_model.device = self.device
         self.sm.load_weights(self.nav_model.networks)
+        # The simplified env, and so every adaptive policy, runs the target actor
+        self.nav_model.actor.load_state_dict(self.nav_model.actor_target.state_dict())
 
         if not isinstance(self.nav_model, TD3):
             raise TypeError(f"Expected TD3 navigation model, got {type(self.nav_model)}")
@@ -263,6 +267,9 @@ class RealFixedEvaluator(Node):
         self.gated_scan_count += 1
         self.last_forward_time = now
         self.recorder.note_fresh_observation(now)
+        rays = scan_rays(msg)
+        if rays is not None:
+            self.last_scan_rays = rays
 
     def _on_raw_scan_recorded(self, msg):
         """Raw-scan subscription callback: run the gate (unchanged), then
@@ -359,6 +366,10 @@ class RealFixedEvaluator(Node):
                 return self.latest_goal
             time.sleep(0.05)
         raise KeyboardInterrupt
+
+    def current_nav_state(self, previous_action):
+        """TD3 state at this instant: latest odometry, held gated scan and the last action sent."""
+        return nav_state(self.last_scan_rays, self.recorder.latest_pose, self.latest_goal, previous_action)
 
     def spin_until(self, deadline):
         """Wait for the next TD3 tick with callbacks running: the scan gate and record timer live on this node."""
@@ -462,6 +473,7 @@ class RealFixedEvaluator(Node):
         self.led.set_blink_rate(self.current_fps)
 
         nav_step = 0
+        previous_action = [0.0, 0.0]
         self.td3_tick_times = []
         self.td3_tick_overruns = 0
         tick_deadline = time.monotonic() + TD3_DT
@@ -480,6 +492,8 @@ class RealFixedEvaluator(Node):
 
             self.td3_tick_times.append(time.monotonic() - self.recorder.start_monotonic)
             nav_step += 1
+            # Fresh state at the tick, as in the simplified env (call_step's state is from after the last command)
+            nav_state = self.current_nav_state(previous_action)
             action = self.nav_model.get_action(
                 nav_state,
                 False,
@@ -488,7 +502,8 @@ class RealFixedEvaluator(Node):
             )
             cmd_linear, cmd_angular = self.action_to_command(action)
             # The returned state must carry the action just sent, as prev_a in the simplified env
-            nav_state, _, done, outcome, _ = self.call_step(action, action)
+            _, _, done, outcome, _ = self.call_step(action, action)
+            previous_action = action
             self._set_record_state(cmd_linear, cmd_angular, outcome, done)
 
             if done:

@@ -83,6 +83,7 @@ from turtlebot3_drl.drl_environment.drl_environment_real import (
 )
 
 from real_episode_recorder import RealEpisodeRecorder
+from real_nav_state import nav_state, scan_rays
 from real_led import DEFAULT_LED_TOPIC, SensingLedController
 from adaptive_obs import (
     ADAPTIVE_FRAME_BUDGET,
@@ -276,6 +277,7 @@ class RealAdaptiveEvaluator(Node):
         self.timeout_seconds = float(timeout_seconds)
         self.diagnose_probs = diagnose_probs
         self.latest_goal = None
+        self.last_scan_rays = None
         self.goal_message_count = 0
         self.consumed_goal_message_count = 0
         self.record_cmd_linear = 0.0
@@ -383,6 +385,8 @@ class RealAdaptiveEvaluator(Node):
         self.nav_model = self.sm.load_model()
         self.nav_model.device = self.device
         self.sm.load_weights(self.nav_model.networks)
+        # The simplified env, and so every adaptive policy, runs the target actor
+        self.nav_model.actor.load_state_dict(self.nav_model.actor_target.state_dict())
 
         if not isinstance(self.nav_model, TD3):
             raise TypeError(
@@ -513,6 +517,9 @@ class RealAdaptiveEvaluator(Node):
         self.gated_scan_count += 1
         self.last_forward_time = now
         self.recorder.note_fresh_observation(now)
+        rays = scan_rays(msg)
+        if rays is not None:
+            self.last_scan_rays = rays
 
     def _on_raw_scan_recorded(self, msg):
         """Raw-scan subscription callback: run the gate (unchanged), then
@@ -656,6 +663,10 @@ class RealAdaptiveEvaluator(Node):
             time.sleep(0.05)
 
         raise KeyboardInterrupt
+
+    def current_nav_state(self, previous_action):
+        """TD3 state at this instant: latest odometry, held gated scan and the last action sent."""
+        return nav_state(self.last_scan_rays, self.recorder.latest_pose, self.latest_goal, previous_action)
 
     def next_tick_deadline(self, deadline):
         """Fixed 0.2 s grid, no drift. A tick that overran its window moves on to the next future deadline."""
@@ -812,6 +823,8 @@ class RealAdaptiveEvaluator(Node):
         self.led.set_blink_rate(self.current_fps)
 
         nav_step = 0
+        previous_nav_action = [0.0, 0.0]
+        nav_state = self.current_nav_state(previous_nav_action)
         self.td3_tick_times = []
         self.td3_tick_overruns = 0
 
@@ -915,7 +928,7 @@ class RealAdaptiveEvaluator(Node):
                 distance_traveled,
             ) = self.call_step(nav_action, nav_action)   # state carries the action just sent, as prev_a in the simplified env
 
-            nav_state = next_nav_state
+            previous_nav_action = nav_action
             self._set_record_state(
                 cmd_linear,
                 cmd_angular,
@@ -979,6 +992,10 @@ class RealAdaptiveEvaluator(Node):
                 tick_deadline = self.next_tick_deadline(tick_deadline)
 
             ppo_step += 1
+
+            # State at the window boundary, used by the NEXT PPO decision and TD3 tick (simplified env order): it
+            # holds every scan forwarded during this window.
+            nav_state = self.current_nav_state(previous_nav_action)
 
             # PPO observation for the NEXT 5-Hz recurrent decision.
             (
