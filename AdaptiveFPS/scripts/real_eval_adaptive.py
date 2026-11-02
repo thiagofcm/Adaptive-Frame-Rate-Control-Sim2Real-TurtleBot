@@ -557,6 +557,9 @@ class RealAdaptiveEvaluator(Node):
         if fps not in FPS_CHOICES:
             raise ValueError(f"FPS must be one of {FPS_CHOICES}; got {fps}")
 
+        if fps == self.current_fps:
+            return
+
         self.current_fps = fps
         self.period = 1.0 / fps
 
@@ -653,6 +656,23 @@ class RealAdaptiveEvaluator(Node):
             time.sleep(0.05)
 
         raise KeyboardInterrupt
+
+    def next_tick_deadline(self, deadline):
+        """Fixed 0.2 s grid, no drift. A tick that overran its window moves on to the next future deadline."""
+        deadline += PPO_DT
+        now = time.monotonic()
+        while deadline <= now:
+            deadline += PPO_DT
+            self.td3_tick_overruns += 1
+        return deadline
+
+    def td3_timing(self):
+        return {
+            "td3_rate_hz": 1.0 / PPO_DT,
+            "nav_steps": len(self.td3_tick_times),
+            "td3_tick_overruns": self.td3_tick_overruns,
+            "td3_tick_times_s": self.td3_tick_times,
+        }
 
     def call_step(self, action, previous_action):
         req = DrlStep.Request()
@@ -791,8 +811,9 @@ class RealAdaptiveEvaluator(Node):
         self.record_timer.reset()
         self.led.set_blink_rate(self.current_fps)
 
-        previous_nav_action = [0.0, 0.0]
         nav_step = 0
+        self.td3_tick_times = []
+        self.td3_tick_overruns = 0
 
         # Gazebo reset semantics count the initial acquired frame as frame #1.
         episode_frame_count = 1
@@ -814,6 +835,7 @@ class RealAdaptiveEvaluator(Node):
         ppo_step = 0
         causal_decisions = 0
         causal_fps_counts = Counter()
+        tick_deadline = time.monotonic() + PPO_DT
 
         self.get_logger().info(
             f"===== REAL ADAPTIVE EPISODE {episode_index} START ====="
@@ -831,6 +853,8 @@ class RealAdaptiveEvaluator(Node):
                     configuration={
                         "causal_decisions": causal_decisions,
                         "fps_action_counts": dict(causal_fps_counts),
+                        "ppo_steps": ppo_step,
+                        **self.td3_timing(),
                     },
                 )
                 self.get_logger().warning(
@@ -865,46 +889,44 @@ class RealAdaptiveEvaluator(Node):
             # reset to 0 if that step consumes a fresh scan.
             steps_since_last_obs += 1
 
-            ppo_step_start = time.monotonic()
             frame_consumed_this_ppo_step = False
             causal_action_applied = False
-            inner_ticks = 0
 
             # --------------------------------------------------------------
-            # Navigation controller continues at its normal real-agent rate
-            # inside this 0.2-s PPO window.
+            # One TD3 tick per 0.2-s PPO window, as in the simplified env.
+            # It uses the latest retained scan, fresh or held.
             # --------------------------------------------------------------
-            while rclpy.ok() and not done:
-                inner_ticks += 1
-                nav_step += 1
+            self.td3_tick_times.append(time.monotonic() - episode_start)
+            nav_step += 1
 
-                nav_action = self.nav_model.get_action(
-                    nav_state,
-                    False,       # training
-                    nav_step,
-                    False,       # visualization
-                )
-                cmd_linear, cmd_angular = self.action_to_command(nav_action)
+            nav_action = self.nav_model.get_action(
+                nav_state,
+                False,       # training
+                nav_step,
+                False,       # visualization
+            )
+            cmd_linear, cmd_angular = self.action_to_command(nav_action)
 
-                (
-                    next_nav_state,
-                    nav_reward,
-                    done,
-                    outcome,
-                    distance_traveled,
-                ) = self.call_step(nav_action, previous_nav_action)
+            (
+                next_nav_state,
+                nav_reward,
+                done,
+                outcome,
+                distance_traveled,
+            ) = self.call_step(nav_action, nav_action)   # state carries the action just sent, as prev_a in the simplified env
 
-                nav_state = next_nav_state
-                previous_nav_action = copy.deepcopy(nav_action)
-                self._set_record_state(
-                    cmd_linear,
-                    cmd_angular,
-                    outcome,
-                    done,
-                )
+            nav_state = next_nav_state
+            self._set_record_state(
+                cmd_linear,
+                cmd_angular,
+                outcome,
+                done,
+            )
 
-                # Did the integrated gate forward a new physical scan while
-                # the service call / callbacks were being processed?
+            # Spin to the end of the window. The first forwarded scan applies
+            # the PPO action straight away, not at the next TD3 tick.
+            while rclpy.ok():
+                # Did the integrated gate forward a new physical scan?
                 new_frames = (
                     self.gated_scan_count - last_seen_gated_count
                 )
@@ -948,13 +970,13 @@ class RealAdaptiveEvaluator(Node):
                     self._record_current_sample()
                     break
 
-                # Preserve the stock real_agent's navigation timing.
-                step_time = float(getattr(self.nav_model, "step_time", 0.0))
-                if step_time > 0:
-                    time.sleep(step_time)
-
-                if time.monotonic() - ppo_step_start >= PPO_DT:
+                remaining = tick_deadline - time.monotonic()
+                if remaining <= 0.0:
                     break
+                rclpy.spin_once(self, timeout_sec=min(0.01, remaining))
+
+            if not done:
+                tick_deadline = self.next_tick_deadline(tick_deadline)
 
             ppo_step += 1
 
@@ -976,7 +998,6 @@ class RealAdaptiveEvaluator(Node):
                 print(
                     f"[PPO] t={elapsed:6.2f}s "
                     f"step={ppo_step:05d} "
-                    f"inner={inner_ticks:02d} "
                     f"fresh={int(frame_consumed_this_ppo_step)} "
                     f"active_fps={self.current_fps:g} "
                     f"fps_ratio={fps_ratio:.3f} "
@@ -997,6 +1018,8 @@ class RealAdaptiveEvaluator(Node):
             configuration={
                 "causal_decisions": causal_decisions,
                 "fps_action_counts": dict(causal_fps_counts),
+                "ppo_steps": ppo_step,
+                **self.td3_timing(),
             },
         )
 

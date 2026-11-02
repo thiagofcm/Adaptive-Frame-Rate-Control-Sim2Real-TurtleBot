@@ -50,6 +50,7 @@ from real_led import DEFAULT_LED_TOPIC, SensingLedController
 RAW_SCAN_TOPIC = "/robot1/scan"
 GOAL_TOPIC = "/goal_pose"
 RECORD_INTERVAL_S = 0.1
+TD3_DT = 0.2   # 5 Hz, the control step of the simplified environment
 
 
 def absolute_topic(name):
@@ -359,6 +360,28 @@ class RealFixedEvaluator(Node):
             time.sleep(0.05)
         raise KeyboardInterrupt
 
+    def spin_until(self, deadline):
+        """Wait for the next TD3 tick with callbacks running: the scan gate and record timer live on this node."""
+        while rclpy.ok() and time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=max(0.0, min(0.01, deadline - time.monotonic())))
+
+    def next_tick_deadline(self, deadline):
+        """Fixed 0.2 s grid, no drift. A tick that overran its window moves on to the next future deadline."""
+        deadline += TD3_DT
+        now = time.monotonic()
+        while deadline <= now:
+            deadline += TD3_DT
+            self.td3_tick_overruns += 1
+        return deadline
+
+    def td3_timing(self):
+        return {
+            "td3_rate_hz": 1.0 / TD3_DT,
+            "nav_steps": len(self.td3_tick_times),
+            "td3_tick_overruns": self.td3_tick_overruns,
+            "td3_tick_times_s": self.td3_tick_times,
+        }
+
     def call_step(self, action, previous_action):
         request = DrlStep.Request()
         request.action = [float(value) for value in action]
@@ -438,8 +461,10 @@ class RealFixedEvaluator(Node):
         self.record_timer.reset()
         self.led.set_blink_rate(self.current_fps)
 
-        previous_action = [0.0, 0.0]
         nav_step = 0
+        self.td3_tick_times = []
+        self.td3_tick_overruns = 0
+        tick_deadline = time.monotonic() + TD3_DT
 
         while rclpy.ok() and not done:
             if (
@@ -451,8 +476,9 @@ class RealFixedEvaluator(Node):
                 self.safe_stop()
                 self._set_record_state(0.0, 0.0, TIMEOUT, True)
                 self._record_current_sample()
-                return self.recorder.finish_episode(TIMEOUT)
+                return self.recorder.finish_episode(TIMEOUT, configuration=self.td3_timing())
 
+            self.td3_tick_times.append(time.monotonic() - self.recorder.start_monotonic)
             nav_step += 1
             action = self.nav_model.get_action(
                 nav_state,
@@ -461,11 +487,8 @@ class RealFixedEvaluator(Node):
                 False,
             )
             cmd_linear, cmd_angular = self.action_to_command(action)
-            nav_state, _, done, outcome, _ = self.call_step(
-                action,
-                previous_action,
-            )
-            previous_action = copy.deepcopy(action)
+            # The returned state must carry the action just sent, as prev_a in the simplified env
+            nav_state, _, done, outcome, _ = self.call_step(action, action)
             self._set_record_state(cmd_linear, cmd_angular, outcome, done)
 
             if done:
@@ -473,13 +496,12 @@ class RealFixedEvaluator(Node):
                 self._record_current_sample()
 
             if not done:
-                step_time = float(getattr(self.nav_model, "step_time", 0.0))
-                if step_time > 0.0:
-                    time.sleep(step_time)
+                self.spin_until(tick_deadline)
+                tick_deadline = self.next_tick_deadline(tick_deadline)
 
         self.led.turn_off()
         self.safe_stop()
-        return self.recorder.finish_episode(outcome)
+        return self.recorder.finish_episode(outcome, configuration=self.td3_timing())
 
 
 # Same default as real_eval_adaptive.py: training episode length (350 x 0.2 s).

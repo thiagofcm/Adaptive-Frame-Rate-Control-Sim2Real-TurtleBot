@@ -224,9 +224,8 @@ class DRLEnvironment(Node):
         state.append(float(self.goal_angle) / math.pi)                                      # range: [-1, 1]
         state.append(float(action_linear_previous))                                         # range: [-1, 1]
         state.append(float(action_angular_previous))                                        # range: [-1, 1]
-        self.local_step += 1
 
-        if self.local_step <= 15: # Grace period to wait for fresh sensor input
+        if self.local_step <= 3: # Grace period, same as world_step_count > 3 in the simplified env
             return state
         # Success
         if self.goal_distance < REAL_THRESHOLD_GOAL:
@@ -270,6 +269,8 @@ class DRLEnvironment(Node):
     def step_comm_callback(self, request, response):
         if len(request.action) == 0:
             return self.initalize_episode(response)
+
+        self.local_step += 1   # one per control step; the episode-initialization call is not a step
 
         # Unnormalize actions
         if ENABLE_BACKWARD:
