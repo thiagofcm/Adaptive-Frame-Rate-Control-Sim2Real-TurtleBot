@@ -386,7 +386,9 @@ class RealAdaptiveEvaluator(Node):
         self.nav_model.device = self.device
         self.sm.load_weights(self.nav_model.networks)
         # The simplified env, and so every adaptive policy, runs the target actor
-        self.nav_model.actor.load_state_dict(self.nav_model.actor_target.state_dict())
+        # The pickled agent (stage9_agent.pkl) predates the rename and calls it target_actor; newer code, actor_target
+        target_actor = getattr(self.nav_model, "actor_target", None) or getattr(self.nav_model, "target_actor")
+        self.nav_model.actor.load_state_dict(target_actor.state_dict())
 
         if not isinstance(self.nav_model, TD3):
             raise TypeError(
