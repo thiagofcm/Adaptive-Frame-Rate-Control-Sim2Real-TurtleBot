@@ -1,0 +1,4 @@
+episode,policy_name,policy_type,success,collision,collision_wall,collision_obstacle,tumble,timeout,outcome_code,outcome_str,episode_duration_s,distance_traveled_m,mean_fps,n_fresh_observations,start_x,start_y,final_x,final_y,goal_x,goal_y,final_goal_distance
+1,fixed_5hz,fixed,True,False,False,False,False,False,1,SUCCESS,61.703641782005434,11.594741465277753,2.5,156,6.11962877883343e-06,-7.078531325532822e-06,4.136411190032959,4.934954643249512,4.3,5.0,0.17604600870576673
+2,fixed_5hz,fixed,True,False,False,False,False,False,1,SUCCESS,48.9031753379968,9.377681613536092,2.5,124,8.402184903388843e-08,-9.736322681419551e-08,4.154599189758301,4.918874740600586,4.3,5.0,0.16650136135048504
+3,fixed_5hz,fixed,True,False,False,False,False,False,1,SUCCESS,47.930594275007024,8.909547699406215,2.5,121,0.0,0.0,4.1566619873046875,4.945013999938965,4.3,5.0,0.15352278686290735

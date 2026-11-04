@@ -1,0 +1,98 @@
+exp_name: train_adaptive_fps_ppo
+seed: 1
+lidar_seed: 100001
+torch_deterministic: True
+cuda: False
+track: False
+wandb_project_name: cleanRL
+wandb_entity: None
+env_id: TurtleBot_VarScanRate
+scene: corridor_static_object_random
+randomize_static_obstacles: True
+randomize_obstacle_presence: False
+randomize_obstacle_velocity: False
+randomize_obstacle_y: False
+native_lidar_hz: None
+native_lidar_hz_range: [7.4, 7.8]
+actuator_delay_s: 0.0
+actuator_tau_v_s: 0.0
+actuator_tau_w_s: 0.0
+randomize_actuator: True
+nav_path: runs/navigation_model/target_actor_stage9_episode7400.pt
+total_timesteps: 50000000
+learning_rate: 0.0003
+num_envs: 32
+num_steps: 1024
+lstm_hidden_size: 64
+anneal_lr: False
+gamma: 0.99
+gae_lambda: 0.98
+num_minibatches: 4
+update_epochs: 4
+norm_adv: True
+clip_coef: 0.2
+clip_vloss: True
+ent_coef: 0.05
+vf_coef: 0.5
+max_grad_norm: 0.5
+target_kl: None
+batch_size: 32768
+minibatch_size: 8192
+num_iterations: 1525
+max_episode_steps: 350
+resume_path: None
+checkpoint_interval: 100
+async_envs: True
+budget: 450.0
+budget_penalty: 15.0
+frame_cost: 0.05
+goal_pose_list: ((-1.8, -2.5), (-1.5, -2.5), (-2.1, -2.5), (-1.8, -2.2), (-1.6, -2.3), (-2.0, -2.3), (-1.5, -2.2), (-2.1, -2.2), (-1.8, -2.0))
+run_tag: native_actuator_gain_dr
+start_pose: (2.5, 2.5, -2.9441970937399127)  # x, y, yaw
+static_obstacles_randomization_enabled: True
+static_obstacles.LENGTH_RANGE: (0.1, 0.6)
+static_obstacles.THICKNESS_RANGE: (0.15, 0.6)
+static_obstacles.Z1_X_OFFSET_RANGE: (-0.5, 0.0)
+static_obstacles.Z2_X_OFFSET_RANGE: (-0.5, 0.0)
+static_obstacles.Z3_Y_OFFSET_RANGE: (-0.55, 0.0)
+static_obstacles.Z4_Y_OFFSET_RANGE: (-0.55, 0.0)
+static_obstacles.MIN_NOMINAL_CLEARANCE: 0.75
+static_obstacles.MIN_Z1_Z3_DISTANCE: 0.7
+static_obstacles.HARD_PAIR_PROB: 0.5
+static_obstacles.HARD_BAND: 0.05
+obstacle_presence_randomization_enabled: False
+obstacle_velocity_randomization_enabled: False
+obstacle_y_randomization_enabled: False
+control_dt_s: 0.2
+td3_control_hz: 5
+ppo_decision_hz: 5
+native_lidar_timing_randomization_enabled: True
+native_lidar_timing.NATIVE_SHORT_INTERVAL: 0.1228
+native_lidar_timing.NATIVE_LONG_INTERVAL: 0.1351
+native_lidar_timing.NATIVE_SHORT_TO_LONG: 0.97
+native_lidar_timing.NATIVE_ARRIVAL_JITTER: 0.00064
+native_lidar_timing.NATIVE_RECEIVE_DELAY_QUANTILES: ((0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999, 1.0), (0.0, 0.001, 0.0016, 0.0024, 0.0037, 0.0048, 0.008, 0.022, 0.03))
+actuator_delay_s: 0.0
+actuator_tau_v_s: 0.0
+actuator_tau_w_s: 0.0
+actuator_randomization_enabled: True
+actuator_randomization.ACTUATOR_DELAY_MEAN: 0.15
+actuator_randomization.ACTUATOR_DELAY_STD: 0.02
+actuator_randomization.ACTUATOR_DELAY_RANGE: (0.1, 0.18)
+actuator_randomization.ACTUATOR_TAU_V_RANGE: (0.05, 0.1)
+actuator_randomization.ACTUATOR_TAU_W_RANGE: (0.02, 0.07)
+actuator_randomization.ACTUATOR_K_V_RANGE: (0.98, 1.02)
+actuator_randomization.ACTUATOR_K_W_RANGE: (0.95, 1.05)
+# Randomized variables: drawn at every reset, constant within the episode
+randomized.static_obstacle_length_m: [0.1, 0.6] (hard/normal pair mixture, hard_pair_prob 0.5)
+randomized.static_obstacle_thickness_m: [0.15, 0.6] (hard/normal pair mixture, hard_pair_prob 0.5)
+randomized.static_obstacle_z1_x_offset_m: [-0.5, 0]
+randomized.static_obstacle_z2_x_offset_m: [-0.5, 0]
+randomized.static_obstacle_z3_y_offset_m: [-0.55, 0]
+randomized.static_obstacle_z4_y_offset_m: [-0.55, 0]
+randomized.native_lidar_mean_rate_hz: uniform [7.4, 7.8] (intervals 0.1228 / 0.1351 s)
+randomized.actuator_delay_s: truncated normal (mean 0.15, std 0.02) on [0.1, 0.18]
+randomized.actuator_tau_v_s: uniform [0.05, 0.1]
+randomized.actuator_tau_w_s: uniform [0.02, 0.07]
+randomized.actuator_k_v: uniform [0.98, 1.02] (v_target = k_v * v_cmd)
+randomized.actuator_k_w: uniform [0.95, 1.05] (w_target = k_w * w_cmd)
