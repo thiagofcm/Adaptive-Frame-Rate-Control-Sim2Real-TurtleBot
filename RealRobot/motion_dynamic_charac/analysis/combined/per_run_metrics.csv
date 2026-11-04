@@ -1,0 +1,6 @@
+run,mode,outcome,completed,duration_s,motion_duration_s,total_distance_m,net_displacement_m,final_x_s_m,final_y_s_m,final_heading_change_deg,ideal_final_x_s_m,ideal_final_y_s_m,final_position_error_m,final_heading_error_deg,total_rotation_deg,max_abs_v_linear_mps,max_abs_angular_radps,n_transitions_expected,n_transitions_executed,n_tracking_anomalies,n_cmd,n_odom,clock_offset_s,notes
+combined_run_1,constant_curvature,COMPLETED,True,27.1157,22,2.19386,1.92306,1.72325,0.853579,-22.7812,1.47762,1.48733,0.679687,-22.7812,346.936,0.168027,0.567159,8,8,0,145,538,1793662714.819754,
+combined_run_2,constant_curvature,COMPLETED,True,27.1556,22.0001,2.35671,2.05743,1.52125,1.38522,-4.27328,1.47762,1.48733,0.111045,-4.27328,364.96,0.169123,0.553887,8,8,0,145,544,1793662781.526261,
+combined_run_3,constant_curvature,COMPLETED,True,27.1097,22,2.1202,1.85109,1.74802,0.60906,-31.0669,1.47762,1.48733,0.918955,-31.0669,338.852,0.170347,0.560367,8,8,0,145,535,1793662833.520217,
+combined_run_4,constant_curvature,COMPLETED,True,27.0932,21.9998,2.1817,1.90992,1.72265,0.824787,-23.5923,1.47762,1.48733,0.706401,-23.5923,345.721,0.172336,0.558657,8,8,0,145,543,1793662885.537753,
+combined_run_5,constant_curvature,COMPLETED,True,27.1535,22,2.16454,1.89212,1.72624,0.774727,-25.1515,1.47762,1.48733,0.75473,-25.1515,343.752,0.167157,0.562149,8,8,0,145,542,1793662934.929081,

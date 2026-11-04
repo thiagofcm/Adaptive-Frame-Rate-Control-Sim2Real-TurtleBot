@@ -1,0 +1,4 @@
+kind,straight_time_s,w_bias_radps,n_episodes,w_bias_episode_std
+isolated_combined,0,NaN,0,NaN
+isolated_linear,147.2,-0.00106149,5,0.000232666
+td3,51.2001,0.000537097,8,0.00404967

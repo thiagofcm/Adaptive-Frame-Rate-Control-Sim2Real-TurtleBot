@@ -1,0 +1,38 @@
+transition_id,v_prev_cmd_mps,v_new_cmd_mps,delta_v_cmd_mps,metric,unit,mean,std,min,max,n_valid_runs,n_runs,runs
+T1_0.00->0.10,0,0.1,0.1,response_delay_s,s,0.822821,0.578531,0.33905,1.61398,5,6,run_1;run_2;run_3;run_5;run_6
+T1_0.00->0.10,0,0.1,0.1,rise_time_s,s,0.0658966,0.00920987,0.0567867,0.0804106,5,6,run_1;run_2;run_3;run_5;run_6
+T1_0.00->0.10,0,0.1,0.1,settling_time_s,s,1.0795,0.552053,0.530077,1.80426,5,6,run_1;run_2;run_3;run_5;run_6
+T1_0.00->0.10,0,0.1,0.1,steady_state_error_mps,m/s,0.000279059,0.00026079,-5.09113e-05,0.000595155,5,6,run_1;run_2;run_3;run_5;run_6
+T1_0.00->0.10,0,0.1,0.1,abs_steady_state_error_mps,m/s,0.000299423,0.000230837,5.09113e-05,0.000595155,5,6,run_1;run_2;run_3;run_5;run_6
+T1_0.00->0.10,0,0.1,0.1,overshoot_pct,%,34.2693,4.24948,26.8635,37.6079,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,response_delay_s,s,0.139652,0.0183303,0.120284,0.164239,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,rise_time_s,s,0.0653255,0.00949485,0.0529081,0.0791345,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,settling_time_s,s,0.285988,0.092907,0.180585,0.431313,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,steady_state_error_mps,m/s,0.00185903,0.000360709,0.00155878,0.00243643,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,abs_steady_state_error_mps,m/s,0.00185903,0.000360709,0.00155878,0.00243643,5,6,run_1;run_2;run_3;run_5;run_6
+T2_0.10->0.15,0.1,0.15,0.05,overshoot_pct,%,37.3496,6.41489,27.0547,44.3982,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,response_delay_s,s,0.182584,0.0899634,0.121345,0.340685,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,rise_time_s,s,0.0626792,0.0194174,0.0296402,0.0797819,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,settling_time_s,s,0.38197,0.163567,0.171691,0.603567,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,steady_state_error_mps,m/s,0.00262372,0.000470908,0.00206867,0.00335752,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,abs_steady_state_error_mps,m/s,0.00262372,0.000470908,0.00206867,0.00335752,5,6,run_1;run_2;run_3;run_5;run_6
+T3_0.15->0.20,0.15,0.2,0.05,overshoot_pct,%,35.2371,9.39987,24.7418,48.6417,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,response_delay_s,s,0.164981,0.0329752,0.135809,0.214143,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,rise_time_s,s,0.0813045,0.0106822,0.0630697,0.0900554,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,settling_time_s,s,0.343435,0.0164254,0.325274,0.364575,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,steady_state_error_mps,m/s,0.000717707,0.000486475,4.20336e-05,0.00126342,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,abs_steady_state_error_mps,m/s,0.000717707,0.000486475,4.20336e-05,0.00126342,5,6,run_1;run_2;run_3;run_5;run_6
+T4_0.20->0.10,0.2,0.1,-0.1,overshoot_pct,%,33.2954,2.31503,31.1575,36.6503,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,response_delay_s,s,0.140848,0.0171354,0.123442,0.164101,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,rise_time_s,s,0.097671,0.00483333,0.0945491,0.106135,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,settling_time_s,s,0.233687,0.0190272,0.215103,0.254465,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,steady_state_error_mps,m/s,8.85371e-06,1.71871e-05,-1.01166e-05,3.66092e-05,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,abs_steady_state_error_mps,m/s,1.29003e-05,1.36147e-05,2.01915e-06,3.66092e-05,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,overshoot_pct,%,8.4411,3.07801,4.32144,12.5214,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,stopping_time_s,s,0.271045,0.0567423,0.21535,0.353951,5,6,run_1;run_2;run_3;run_5;run_6
+T5_0.10->0.00,0.1,0,-0.1,stopping_distance_m,m,0.0148676,0.0015518,0.0128663,0.016737,5,6,run_1;run_2;run_3;run_5;run_6
+RUN(completed runs),NaN,NaN,NaN,duration_s,s,20.7944,0.612609,20.3637,21.7185,5,6,run_1;run_2;run_3;run_5;run_6
+RUN(completed runs),NaN,NaN,NaN,motion_duration_s,s,16.16,0.606655,15.5999,17.0001,5,6,run_1;run_2;run_3;run_5;run_6
+RUN(completed runs),NaN,NaN,NaN,total_distance_m,m,1.97709,0.006548,1.96845,1.98452,5,6,run_1;run_2;run_3;run_5;run_6
+RUN(completed runs),NaN,NaN,NaN,net_displacement_m,m,1.97443,0.00657712,1.96632,1.98289,5,6,run_1;run_2;run_3;run_5;run_6
+RUN(completed runs),NaN,NaN,NaN,max_lateral_deviation_m,m,0.0318992,0.00508914,0.0245924,0.0379891,5,6,run_1;run_2;run_3;run_5;run_6

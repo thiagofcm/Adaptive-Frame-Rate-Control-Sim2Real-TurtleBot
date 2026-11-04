@@ -1,0 +1,7 @@
+run,outcome,completed,duration_s,motion_duration_s,total_distance_m,net_displacement_m,max_lateral_deviation_m,lateral_at_max_signed_m,n_transitions_expected,n_transitions_executed,n_valid_transitions,n_cmd,n_odom,clock_offset_s,notes
+run_1,COMPLETED,True,21.1332,16.5999,1.97234,1.96956,0.0309954,-0.0309954,5,5,5,115,416,1793659352.149554,
+run_2,COMPLETED,True,20.3637,15.8001,1.98085,1.97763,0.0352018,-0.0352018,5,5,5,111,407,1793659464.616394,
+run_3,COMPLETED,True,21.7185,17.0001,1.97928,1.97575,0.0379891,-0.0379891,5,5,5,118,423,1793659927.366015,
+run_4,ABORTED: odometry is 0.57 s old,False,1.30318,NaN,4.02784e-05,2.01234e-05,6.09829e-07,6.09829e-07,5,0,0,15,11,1793659988.377962,ABORTED: odometry is 0.57 s old; reached 1 command segment(s)
+run_5,COMPLETED,True,20.3638,15.8,1.98452,1.98289,0.0307172,-0.0307172,5,5,5,111,409,1793660003.782524,
+run_6,COMPLETED,True,20.3927,15.5999,1.96845,1.96632,0.0245924,-0.0245924,5,5,5,111,408,1793660078.485763,
