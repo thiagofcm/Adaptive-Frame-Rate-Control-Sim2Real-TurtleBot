@@ -1,0 +1,4 @@
+policy_name,mean_fps,std_fps,n_episodes_total,success_rate_percent,mean_duration_s,std_duration_s,mean_distance_traveled_m,std_distance_traveled_m,mean_n_fresh_observations,std_n_fresh_observations
+adaptive_act_random_fc_0.04,2.488365,0.339539,6,50.000000,58.350638,13.660251,10.770472,2.475537,138.333333,26.058908
+adaptive_lidar_random_fc_0.05,2.122589,0.317260,5,20.000000,46.955010,30.461716,8.362073,5.793192,95.200000,65.522515
+fixed_2.5,2.500000,0.000000,5,60.000000,57.116160,12.353606,10.544192,2.535085,144.600000,30.770115

@@ -1,0 +1,2 @@
+policy_name,mean_fps,std_fps,n_episodes_total,success_rate_percent,mean_duration_s,std_duration_s,mean_distance_traveled_m,std_distance_traveled_m,mean_n_fresh_observations,std_n_fresh_observations
+adaptive_lidar_random_fc_0.05,2.122589,0.317260,5,20.000000,46.955010,30.461716,8.362073,5.793192,95.200000,65.522515
