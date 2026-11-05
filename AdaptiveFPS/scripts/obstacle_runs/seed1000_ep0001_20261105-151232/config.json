@@ -1,0 +1,72 @@
+{
+  "completed_reversals": 3,
+  "end_reason": "max_duration",
+  "end_wall_time": "2026-11-05T15:13:42",
+  "max_duration_s": 70.0,
+  "parameters": {
+    "CONTROL_RATE_HZ": 20.0,
+    "END_REGION_FRACTION": [
+      0.75,
+      1.0
+    ],
+    "HEADING_GAIN": 1.0,
+    "LATERAL_GAIN": 1.0,
+    "LATERAL_HEADING_MAX": 0.08726646259971647,
+    "LATERAL_LIMIT_M": 0.1,
+    "MAX_TURN_RETRIES": 3,
+    "ODOM_TIMEOUT_S": 0.3,
+    "SETTLE_MAX_S": 1.5,
+    "SETTLE_RATE": 0.05,
+    "SETTLE_TICKS": 3,
+    "SETTLE_TOLERANCE": 0.05235987755982989,
+    "SPEED_MPS": 0.06,
+    "START_REGION_FRACTION": [
+      0.0,
+      0.25
+    ],
+    "STOP_MAX_S": 1.0,
+    "STOP_SPEED_MPS": 0.01,
+    "STRAIGHT_TURN_RATE_MAX": 0.2,
+    "TARGET_TOLERANCE_M": 0.005,
+    "TRACK_LENGTH_M": 1.0,
+    "TRACK_MARGIN_M": 0.05,
+    "TURN_ACCEL": 1.5,
+    "TURN_DONE_TOLERANCE": 0.03490658503988659,
+    "TURN_FINE_ZONE": 0.4,
+    "TURN_P_GAIN": 2.0,
+    "TURN_RATE_MAX": 0.8,
+    "TURN_RATE_MIN": 0.15,
+    "TURN_TIMEOUT_S": 15.0
+  },
+  "realization": {
+    "episode": 1,
+    "gazebo_first_reversal_time_s": 8.033748416065476,
+    "initial_direction": 1,
+    "initial_facing": "E",
+    "obstacle_index": 0,
+    "planned_targets_m": [
+      0.8024114771088598,
+      0.22040729256432265,
+      0.9897257911807533,
+      0.07899370527965538,
+      0.8092833324497251,
+      0.10890929576658726,
+      0.9944540562163091,
+      0.006972621817675079
+    ],
+    "s0_m": 0.32038657214493127,
+    "seed": 1000
+  },
+  "reference_pose": {
+    "theta_e": -1.424367646059492,
+    "theta_s": 1.717225007530301,
+    "x": -0.005432242527604103,
+    "y": 0.04699717462062836,
+    "yaw": -1.424367646059492
+  },
+  "start_wall_time": "2026-11-05T15:12:32",
+  "topics": {
+    "cmd_vel": "/robot3/cmd_vel_unstamped",
+    "odom": "/robot3/odom"
+  }
+}

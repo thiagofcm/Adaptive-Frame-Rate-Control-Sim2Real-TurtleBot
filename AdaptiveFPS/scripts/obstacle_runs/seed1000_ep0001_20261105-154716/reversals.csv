@@ -1,0 +1,2 @@
+index,planned_target_s,direction_before,trigger_time_s,trigger_s,stopped_time_s,stopped_s,overshoot_m,turn_sign,rotation_start_s,rotation_end_s,rotation_duration_s,final_heading_error_deg,turn_retries,next_target_s,aborted
+1,0.8024114771088598,1,11.350083232013276,0.8060250323614317,12.350206867005909,0.863648751958553,0.0612372748496931,1,12.350206867005909,,,,,,turn_timeout
