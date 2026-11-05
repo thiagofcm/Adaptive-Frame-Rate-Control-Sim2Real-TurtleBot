@@ -82,8 +82,7 @@ STRAIGHT_TURN_RATE_MAX = 0.2          # rad/s, cap on straight-leg corrections
 # ---------------------------------------------------------------------------
 TRACK_MARGIN_M = 0.05                 # stop if s leaves [-margin, length + margin]
 LATERAL_LIMIT_M = 0.10                # stop if |lateral| exceeds this
-ODOM_TIMEOUT_S = 0.3                  # pause (zero command) while odometry is older than this
-ODOM_LOST_S = 2.0                     # end the run if odometry is older than this
+ODOM_TIMEOUT_S = 0.3                  # stop if odometry is older than this
 ODOM_WAIT_S = 5.0                     # wait this long for the first odometry
 STOP_REPEATS = 5                      # zero commands published on exit
 
@@ -439,7 +438,7 @@ def controller_parameters():
              "TURN_DONE_TOLERANCE", "SETTLE_TOLERANCE", "SETTLE_RATE", "SETTLE_TICKS",
              "SETTLE_MAX_S", "MAX_TURN_RETRIES", "TURN_TIMEOUT_S", "HEADING_GAIN", "LATERAL_GAIN",
              "LATERAL_HEADING_MAX", "STRAIGHT_TURN_RATE_MAX", "TRACK_MARGIN_M", "LATERAL_LIMIT_M",
-             "ODOM_TIMEOUT_S", "ODOM_LOST_S"]
+             "ODOM_TIMEOUT_S"]
     return {name: globals()[name] for name in names}
 
 
@@ -502,7 +501,6 @@ def run_robot(args):
 
     logger = None
     controller = None
-    odom_paused, pause_start, odom_pauses, pause_time, longest_pause = False, 0.0, 0, 0.0, 0.0
     try:
         print_dry_run(plan)
         print(f"Velocity topic {cmd_topic}, odometry topic {odom_topic}")
@@ -523,8 +521,6 @@ def run_robot(args):
                                "theta_e": frame.theta_e, "theta_s": frame.theta_s},
             "topics": {"cmd_vel": cmd_topic, "odom": odom_topic},
             "max_duration_s": args.max_duration,
-            "odom_pause_s": args.odom_pause,
-            "odom_lost_s": args.odom_lost,
             "parameters": controller_parameters(),
             "start_wall_time": datetime.now().isoformat(timespec="seconds"),
             "end_reason": None,
@@ -543,33 +539,10 @@ def run_robot(args):
             next_tick += period
             t = now - start
             msg = latest["msg"]
+            if now - latest["received"] > ODOM_TIMEOUT_S:
+                controller._stop("odom_stale", t)
             pose, twist = msg.pose.pose, msg.twist.twist
             yaw = yaw_of(pose.orientation)
-            odom_age = now - latest["received"]
-            if odom_age > args.odom_lost:
-                controller._stop("odom_lost", t)
-            elif odom_age > args.odom_pause:
-                # Short odometry dropout: hold still and wait instead of acting on an
-                # old pose. The controller resumes from the next fresh message.
-                if not odom_paused:
-                    odom_paused, pause_start = True, now
-                    odom_pauses += 1
-                controller._turn_cmd = 0.0          # restart the turn ramp after the pause
-                publish(0.0, 0.0)
-                track_s, track_lat = controller.frame.project(pose.position.x, pose.position.y)
-                logger.odom_row({"t_s": t, "state": "ODOM_PAUSE", "x": pose.position.x,
-                                 "y": pose.position.y, "yaw": yaw, "s": track_s,
-                                 "lateral": track_lat, "target_s": controller.target,
-                                 "direction": controller.direction,
-                                 "target_heading": controller.target_heading,
-                                 "heading_error": controller.heading_error(yaw),
-                                 "cmd_linear": 0.0, "cmd_angular": 0.0,
-                                 "meas_linear": twist.linear.x, "meas_angular": twist.angular.z})
-                continue
-            elif odom_paused:
-                odom_paused = False
-                pause_time += now - pause_start
-                longest_pause = max(longest_pause, now - pause_start)
             v_cmd, w_cmd = controller.step(t, pose.position.x, pose.position.y, yaw,
                                            twist.linear.x, twist.angular.z)
             if controller.state == STOPPED:
@@ -605,12 +578,6 @@ def run_robot(args):
             logger.reversals(controller.reversals)
             logger.config["end_reason"] = controller.end_reason
             logger.config["completed_reversals"] = controller.reversal_count
-            if odom_paused:                     # run ended during a pause
-                pause_time += time.monotonic() - pause_start
-                longest_pause = max(longest_pause, time.monotonic() - pause_start)
-            logger.config["odom_pauses"] = odom_pauses
-            logger.config["odom_pause_total_s"] = pause_time
-            logger.config["odom_pause_longest_s"] = longest_pause
             logger.config["end_wall_time"] = datetime.now().isoformat(timespec="seconds")
             logger.write_config(logger.config)
             logger.close()
@@ -629,12 +596,6 @@ def main(argv=None):
                         help="Gazebo evaluation episode whose OB1 realization to replay (1, 2, ...)")
     parser.add_argument("--max-duration", type=float, default=DEFAULT_MAX_DURATION_S,
                         help="Stop after this many seconds (default: %(default)s, the Stage 14 timeout)")
-    parser.add_argument("--odom-pause", type=float, default=ODOM_TIMEOUT_S,
-                        help="Hold still while odometry is older than this many seconds "
-                        "(default: %(default)s)")
-    parser.add_argument("--odom-lost", type=float, default=ODOM_LOST_S,
-                        help="End the run if odometry is older than this many seconds "
-                        "(default: %(default)s)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print the start position, facing and reversal targets; do not move")
     parser.add_argument("--output-root", default=str(Path(__file__).resolve().parent / "obstacle_runs"))
@@ -645,8 +606,6 @@ def main(argv=None):
         parser.error("--episode must be >= 0")
     if args.max_duration <= 0:
         parser.error("--max-duration must be > 0")
-    if not 0 < args.odom_pause < args.odom_lost:
-        parser.error("need 0 < --odom-pause < --odom-lost")
 
     if args.dry_run:
         print_dry_run(GazeboReversalPlan(args.seed, args.episode))
