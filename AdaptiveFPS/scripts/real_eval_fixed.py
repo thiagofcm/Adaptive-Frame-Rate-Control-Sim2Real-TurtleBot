@@ -522,7 +522,7 @@ class RealFixedEvaluator(Node):
 
 
 # Same default as real_eval_adaptive.py: training episode length (350 x 0.2 s).
-FIXED_EPISODE_TIMEOUT_SECONDS = 70.0
+FIXED_EPISODE_TIMEOUT_SECONDS = 80.0
 
 def main():
     parser = argparse.ArgumentParser(

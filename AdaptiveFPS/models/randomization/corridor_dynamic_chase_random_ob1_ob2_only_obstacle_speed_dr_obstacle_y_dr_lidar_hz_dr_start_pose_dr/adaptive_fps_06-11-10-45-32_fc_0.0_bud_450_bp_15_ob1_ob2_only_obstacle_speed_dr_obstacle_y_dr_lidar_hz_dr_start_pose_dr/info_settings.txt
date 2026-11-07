@@ -1,0 +1,88 @@
+exp_name: train_adaptive_fps_ppo
+seed: 1
+lidar_seed: 100001
+torch_deterministic: True
+cuda: False
+track: False
+wandb_project_name: cleanRL
+wandb_entity: None
+env_id: TurtleBot_VarScanRate
+scene: corridor_dynamic_chase_random
+static_obstacle_dr: False
+obstacle_presence_dr: False
+obstacle_speed_dr: True
+obstacle_y_dr: True
+obstacle_radius_dr: False
+lidar_hz_dr: True
+native_lidar_hz: None
+actuator_delay_s: 0.0
+actuator_tau_v_s: 0.0
+actuator_tau_w_s: 0.0
+actuator_dr: False
+gain_dr: False
+obstacles: (1, 2)
+start_pose_dr: True
+nav_path: runs/navigation_model/target_actor_stage9_episode7400.pt
+total_timesteps: 100000000
+learning_rate: 0.0003
+num_envs: 32
+num_steps: 1024
+lstm_hidden_size: 64
+anneal_lr: False
+gamma: 0.99
+gae_lambda: 0.98
+num_minibatches: 4
+update_epochs: 4
+norm_adv: True
+clip_coef: 0.2
+clip_vloss: True
+ent_coef: 0.05
+vf_coef: 0.5
+max_grad_norm: 0.5
+target_kl: None
+batch_size: 32768
+minibatch_size: 8192
+num_iterations: 3051
+max_episode_steps: 350
+resume_path: None
+checkpoint_interval: 100
+async_envs: True
+budget: 450.0
+budget_penalty: 15.0
+frame_cost: 0.0
+goal_pose_list: ((-1.8, -1.7), (-2.0, -1.8), (-2.0, -2.0), (-2.2, -1.7), (-1.8, -2.1), (-2.2, -2.1))
+run_tag: ob1_ob2_only_obstacle_speed_dr_obstacle_y_dr_lidar_hz_dr_start_pose_dr
+start_pose: (2.5, 2.5, -2.9441970937399127)  # x, y, yaw
+control_dt_s: 0.2
+collision_threshold_m: 0.22
+obstacle_turn_pause_range_s: (4.6, 5.0)  # random_ping_pong reversals
+td3_control_hz: 5
+ppo_decision_hz: 5
+static_obstacle_dr.enabled: False
+obstacle_presence_dr.enabled: False
+obstacle_speed_dr.enabled: True
+obstacle_speed_dr.OBSTACLE_SPEED_RANGES: ((0.04, 0.08), (0.04, 0.08), (0.08, 0.12))
+obstacle_y_dr.enabled: True
+obstacle_y_dr.OBSTACLE_Y_RANGES: ((1.2, 1.7), (0.6, 1.1))
+obstacle_y_dr.OBSTACLE_Y_GAP_RANGE: (0.55, 0.65)
+obstacle_radius_dr.enabled: False
+lidar_hz_dr.enabled: True
+lidar_hz_dr.NATIVE_LIDAR_HZ_RANGE: (7.4, 7.8)
+lidar_hz_dr.NATIVE_SHORT_INTERVAL: 0.1228
+lidar_hz_dr.NATIVE_LONG_INTERVAL: 0.1351
+lidar_hz_dr.NATIVE_SHORT_TO_LONG: 0.97
+lidar_hz_dr.NATIVE_ARRIVAL_JITTER: 0.00064
+lidar_hz_dr.NATIVE_RECEIVE_DELAY_QUANTILES: ((0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999, 1.0), (0.0, 0.001, 0.0016, 0.0024, 0.0037, 0.0048, 0.008, 0.022, 0.03))
+actuator_dr.enabled: False
+gain_dr.enabled: False
+start_pose_dr.enabled: True
+start_pose_dr.START_POSE_LIST: ((2.5, 2.5), (2.3, 2.5), (2.5, 2.3), (2.3, 2.3), (2.4, 2.4))
+start_pose_dr.START_YAW_CENTER: 3.141592653589793
+start_pose_dr.START_YAW_NOISE: 0.17453292519943295
+# Randomized variables: drawn at every reset, constant within the episode
+randomized.obstacle_speed_mps: uniform per obstacle ['[0.04, 0.08]', '[0.04, 0.08]', '[0.08, 0.12]']
+randomized.obstacle_path_y_m: ['[1.2, 1.7]', '[0.6, 1.1]'], gap [0.55, 0.65]
+randomized.native_lidar_mean_rate_hz: uniform [7.4, 7.8] (intervals 0.1228 / 0.1351 s)
+randomized.start_xy_m: uniform over [(2.5, 2.5), (2.3, 2.5), (2.5, 2.3), (2.3, 2.3), (2.4, 2.4)]
+randomized.start_yaw_rad: 3.14159 + uniform [-0.174533, 0.174533] (same start_pose_seed as the position)
+fixed.obstacles: OB1 + OB2 in every episode (obstacles)

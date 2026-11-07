@@ -110,7 +110,7 @@ if not math.isclose(MAX_OBS_AGE_STEPS * PPO_DT, 5.0):
     )
 
 # Training env episode length: max_episode_steps 350 x control_dt 0.2 s.
-ADAPTIVE_EPISODE_TIMEOUT_SECONDS = 70.0
+ADAPTIVE_EPISODE_TIMEOUT_SECONDS = 80.0
 
 # The TD3 navigation state stays 44-D. The PPO observation is the canonical
 # 43-D one: the 40 held LiDAR rays (first entries of the TD3 state) + 3 features.
