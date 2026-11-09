@@ -25,6 +25,7 @@ os.environ.setdefault("DRLNAV_BASE_PATH", str(REPOSITORY_ROOT))
 
 from turtlebot3_drl.common import utilities as util
 from turtlebot3_drl.common.settings import (
+    COLLISION_WALL,
     ENABLE_BACKWARD,
     ENABLE_STACKING,
     REAL_N_SCAN_SAMPLES,
@@ -43,6 +44,12 @@ from turtlebot3_drl.drl_environment.drl_environment_real import (
     real_scan_beam_indices,
 )
 
+from real_collision import (
+    DEFAULT_HAZARD_TOPIC,
+    GRACE_STEPS,
+    NativeCollisionMonitor,
+    create_bump_subscription,
+)
 from real_episode_recorder import RealEpisodeRecorder
 from real_nav_state import nav_state, scan_rays
 from real_led import DEFAULT_LED_TOPIC, SensingLedController
@@ -65,6 +72,7 @@ ROBOT_TOPIC_DEFAULTS = {
     "odom_topic": absolute_topic(REAL_TOPIC_ODOM),
     "cmd_vel_topic": absolute_topic(REAL_TOPIC_VELO),
     "led_topic": DEFAULT_LED_TOPIC,
+    "hazard_topic": DEFAULT_HAZARD_TOPIC,
 }
 
 
@@ -92,6 +100,8 @@ class RealFixedEvaluator(Node):
         goal_service,
         led_topic=DEFAULT_LED_TOPIC,
         led_enabled=True,
+        hazard_topic=DEFAULT_HAZARD_TOPIC,
+        bump_enabled=True,
     ):
         super().__init__("real_fixed_fps_evaluator")
 
@@ -145,6 +155,7 @@ class RealFixedEvaluator(Node):
             "navigation_model_episode": int(nav_episode),
             "record_interval_s": RECORD_INTERVAL_S,
         }
+        self.collision = NativeCollisionMonitor()
         self.recorder = RealEpisodeRecorder(
             output_root=output_root,
             policy_name=policy_name,
@@ -161,6 +172,19 @@ class RealFixedEvaluator(Node):
         )
         # Visualization only: USER_LED_2 blinks at a period encoding current_fps.
         self.led = SensingLedController(self, led_topic, enabled=led_enabled)
+
+        # Collision from the Create 3 bumper (physical contact), next to the
+        # native-scan LiDAR check in the gate. None if disabled or unavailable.
+        self.bump_sub = (
+            create_bump_subscription(self, absolute_topic(hazard_topic), self._on_bump)
+            if bump_enabled
+            else None
+        )
+        self.recorder.configuration.update(
+            NativeCollisionMonitor.configuration(
+                absolute_topic(hazard_topic) if self.bump_sub is not None else None
+            )
+        )
         self.gated_pub = self.create_publisher(
             LaserScan,
             self.gated_scan_topic,
@@ -274,18 +298,43 @@ class RealFixedEvaluator(Node):
             self.last_scan_rays = rays
 
     def _on_raw_scan_recorded(self, msg):
-        """Raw-scan subscription callback: run the gate (unchanged), then
-        record this native scan with whether the gate forwarded it."""
+        """Raw-scan subscription callback: check this native scan for a
+        collision, run the gate (unchanged) if there is none, then record the
+        scan with whether the gate forwarded it."""
         now = time.monotonic()
+        indices = real_scan_beam_indices(msg)
         gated_before = self.gated_scan_count
-        self._on_raw_scan(msg)
+        if not self.collision.detected:
+            due = (
+                self.force_next_fresh
+                or self.next_sample_time is None
+                or now >= self.next_sample_time
+            )
+            if self.collision.check(
+                msg, indices, now, self.recorder.latest_pose, self.latest_goal,
+                self.recorder.start_monotonic, due,
+            ):
+                self._on_collision()
+            else:
+                self._on_raw_scan(msg)
         if self.recorder.lidar_recording:
             self.recorder.note_scan(
                 now,
                 msg,
-                real_scan_beam_indices(msg),
+                indices,
                 forwarded=self.gated_scan_count > gated_before,
             )
+
+    def _on_bump(self, zones):
+        """Create 3 bumper contact: a collision while an episode runs."""
+        if self.collision.check_bump(zones, time.monotonic(), self.recorder.start_monotonic):
+            self._on_collision()
+
+    def _on_collision(self):
+        """Bump or native-scan collision: stop at once; run_episode() ends the
+        episode at its next check."""
+        self.cmd_vel_pub.publish(Twist())
+        self.get_logger().warning(self.collision.describe())
 
     def _on_raw_scan(self, msg):
         now = time.monotonic()
@@ -374,8 +423,9 @@ class RealFixedEvaluator(Node):
         return nav_state(self.last_scan_rays, self.recorder.latest_pose, self.latest_goal, previous_action)
 
     def spin_until(self, deadline):
-        """Wait for the next TD3 tick with callbacks running: the scan gate and record timer live on this node."""
-        while rclpy.ok() and time.monotonic() < deadline:
+        """Wait for the next TD3 tick with callbacks running: the scan gate and record timer live on this node.
+        Returns early on a native-scan collision."""
+        while rclpy.ok() and time.monotonic() < deadline and not self.collision.detected:
             rclpy.spin_once(self, timeout_sec=max(0.0, min(0.01, deadline - time.monotonic())))
 
     def next_tick_deadline(self, deadline):
@@ -452,6 +502,7 @@ class RealFixedEvaluator(Node):
 
     def run_episode(self):
         goal = self.wait_for_manual_goal()
+        self.collision.reset()
         self.reset_scan_gate_for_episode()
         self.wait_for_initial_scan()
         time.sleep(0.10)
@@ -472,6 +523,7 @@ class RealFixedEvaluator(Node):
         self._set_record_state(0.0, 0.0, UNKNOWN, False)
         self._record_current_sample()
         self.record_timer.reset()
+        self.collision.bump_armed = True   # bumps count for the whole episode
         self.led.set_blink_rate(self.current_fps)
 
         nav_step = 0
@@ -485,15 +537,29 @@ class RealFixedEvaluator(Node):
                 time.monotonic() - self.recorder.start_monotonic
                 >= self.timeout_seconds
             ):
+                self.collision.reset()
                 self.record_timer.cancel()
                 self.led.turn_off()
                 self.safe_stop()
                 self._set_record_state(0.0, 0.0, TIMEOUT, True)
                 self._record_current_sample()
-                return self.recorder.finish_episode(TIMEOUT, configuration=self.td3_timing())
+                return self.recorder.finish_episode(
+                    TIMEOUT, configuration={**self.td3_timing(), "native_collision": None}
+                )
+
+            # Bump or native-scan collision since the last check.
+            if self.collision.detected:
+                done, outcome = True, COLLISION_WALL
+                self._set_record_state(0.0, 0.0, outcome, True)
+                self.record_timer.cancel()
+                self._record_current_sample()
+                break
 
             self.td3_tick_times.append(time.monotonic() - self.recorder.start_monotonic)
             nav_step += 1
+            # Same grace period as real_environment: no check during the first GRACE_STEPS steps.
+            if nav_step > GRACE_STEPS:
+                self.collision.armed = True
             # Fresh state at the tick, as in the simplified env (call_step's state is from after the last command)
             nav_state = self.current_nav_state(previous_action)
             action = self.nav_model.get_action(
@@ -516,9 +582,13 @@ class RealFixedEvaluator(Node):
                 self.spin_until(tick_deadline)
                 tick_deadline = self.next_tick_deadline(tick_deadline)
 
+        native_collision = self.collision.detection
+        self.collision.reset()
         self.led.turn_off()
         self.safe_stop()
-        return self.recorder.finish_episode(outcome, configuration=self.td3_timing())
+        return self.recorder.finish_episode(
+            outcome, configuration={**self.td3_timing(), "native_collision": native_collision}
+        )
 
 
 # Same default as real_eval_adaptive.py: training episode length (350 x 0.2 s).
@@ -543,7 +613,7 @@ def main():
     parser.add_argument("--output-root", default=default_output_root())
     parser.add_argument("--namespace", default=None,
                         help="Robot namespace, e.g. robot3: sets /<ns>/scan, /<ns>/scan_gated, /<ns>/odom, "
-                             "/<ns>/cmd_vel_unstamped and /<ns>/hmi/led unless those flags are given "
+                             "/<ns>/cmd_vel_unstamped, /<ns>/hmi/led and /<ns>/hazard_detection unless those flags are given "
                              "(default: the robot1 topics)")
     parser.add_argument("--raw-scan-topic", default=None)
     parser.add_argument("--gated-scan-topic", default=None)
@@ -557,6 +627,11 @@ def main():
                              f"(default: <namespace>/hmi/led, or {DEFAULT_LED_TOPIC})")
     parser.add_argument("--no-led", action="store_true",
                         help="Do not show the sensing rate on the TurtleBot4 LED")
+    parser.add_argument("--hazard-topic", default=None,
+                        help="Create 3 hazard topic for the bump collision check "
+                             f"(default: <namespace>/hazard_detection, or {DEFAULT_HAZARD_TOPIC})")
+    parser.add_argument("--no-bump", action="store_true",
+                        help="Do not end episodes on a Create 3 bump (LiDAR collision check only)")
     args, ros_args = parser.parse_known_args()
     # --namespace fills in the robot-specific topics that were not given explicitly;
     # without it the previous (robot1) defaults are used.
@@ -564,7 +639,7 @@ def main():
         ns = "/" + args.namespace.strip("/")
         for name, suffix in (("raw_scan_topic", "scan"), ("gated_scan_topic", "scan_gated"),
                              ("odom_topic", "odom"), ("cmd_vel_topic", "cmd_vel_unstamped"),
-                             ("led_topic", "hmi/led")):
+                             ("led_topic", "hmi/led"), ("hazard_topic", "hazard_detection")):
             if getattr(args, name) is None:
                 setattr(args, name, f"{ns}/{suffix}")
     for name, default in ROBOT_TOPIC_DEFAULTS.items():
@@ -591,6 +666,8 @@ def main():
         goal_service=args.goal_service,
         led_topic=args.led_topic,
         led_enabled=not args.no_led,
+        hazard_topic=args.hazard_topic,
+        bump_enabled=not args.no_bump,
     )
 
     try:

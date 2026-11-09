@@ -60,7 +60,7 @@ REAL_SPEED_ANGULAR_MAX      = 2.0   # in rad/s
 REAL_LIDAR_YAW_IN_BASE      = 1.5707963267948966  # radians (+90 degrees)
 REAL_LIDAR_CORRECTION       = 0.00  # meters, subtracted from the real LiDAR values
 REAL_LIDAR_DISTANCE_CAP     = 3.5   # meters, scan distances are capped this value
-REAL_THRESHOLD_COLLISION    = 0.24  # meters, minimum distance to an object that counts as a collision
+REAL_THRESHOLD_COLLISION    = 0.235 # meters, a distance <= this counts as a collision
 REAL_THRESHOLD_GOAL         = 0.20  # meters, minimum distance to goal that counts as reaching the goal (= simplified env THRESHOLD_GOAL)
 
 # Gazebo LiDAR geometry the policies were trained on (models/turtlebot3_burger/model.sdf,

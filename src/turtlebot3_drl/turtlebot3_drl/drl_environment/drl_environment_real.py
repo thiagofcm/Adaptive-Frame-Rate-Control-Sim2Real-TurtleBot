@@ -232,7 +232,7 @@ class DRLEnvironment(Node):
             print("Outcome: Goal reached! :)")
             self.succeed = SUCCESS
         # Collision
-        elif self.obstacle_distance < REAL_THRESHOLD_COLLISION:
+        elif self.obstacle_distance <= REAL_THRESHOLD_COLLISION:
             print(
                 "Collision! (wall): "
                 f"minimum scan distance={self.obstacle_distance:.3f} m, "
