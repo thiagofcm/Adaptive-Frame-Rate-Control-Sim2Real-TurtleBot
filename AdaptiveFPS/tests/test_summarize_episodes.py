@@ -1,4 +1,5 @@
 import csv
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,8 +66,10 @@ class SummarizeEpisodesTest(unittest.TestCase):
             self.assertAlmostEqual(summary["std_duration_s"], 1.0)
             self.assertAlmostEqual(summary["mean_distance_traveled_m"], 4.0)
             self.assertAlmostEqual(summary["std_distance_traveled_m"], 2.0)
+            self.assertEqual(summary["n_episodes_success"], 2)
+            # Successful episodes only: 10 and 30.
             self.assertAlmostEqual(summary["mean_n_fresh_observations"], 20.0)
-            self.assertAlmostEqual(summary["std_n_fresh_observations"], 10.0)
+            self.assertAlmostEqual(summary["std_n_fresh_observations"], 14.142135623730951)
 
             output_path = write_summary(episodes_path, summary)
             self.assertEqual(output_path, Path(temporary_directory) / "summary.csv")
@@ -96,7 +99,9 @@ class SummarizeEpisodesTest(unittest.TestCase):
             self.assertEqual(summary["std_fps"], 0.0)
             self.assertEqual(summary["std_duration_s"], 0.0)
             self.assertEqual(summary["std_distance_traveled_m"], 0.0)
-            self.assertEqual(summary["std_n_fresh_observations"], 0.0)
+            # No successful episode: no fresh-observation statistics.
+            self.assertTrue(math.isnan(summary["mean_n_fresh_observations"]))
+            self.assertTrue(math.isnan(summary["std_n_fresh_observations"]))
 
 
 if __name__ == "__main__":

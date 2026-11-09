@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Create one policy-level summary row from an episodes.csv file."""
+"""Create one policy-level summary row from an episodes.csv file.
+
+Fresh observations are averaged over successful episodes only: a collision or
+timeout ends the episode early or late, so its count says more about when it
+ended than about the policy's sensing. NaN when there are no successes.
+"""
 
 import argparse
 import csv
@@ -15,6 +20,7 @@ OUTPUT_FIELDS = [
     "std_fps",
     "n_episodes_total",
     "success_rate_percent",
+    "n_episodes_success",
     "mean_duration_s",
     "std_duration_s",
     "mean_distance_traveled_m",
@@ -60,6 +66,8 @@ def parse_success(row, row_number):
 
 
 def mean_and_sample_std(values):
+    if not values:
+        return math.nan, math.nan
     mean = statistics.fmean(values)
     standard_deviation = statistics.stdev(values) if len(values) > 1 else 0.0
     return mean, standard_deviation
@@ -119,7 +127,10 @@ def summarize(episodes_csv):
     mean_fps, std_fps = mean_and_sample_std(episode_fps)
     mean_duration, std_duration = mean_and_sample_std(durations)
     mean_distance, std_distance = mean_and_sample_std(distances)
-    mean_fresh, std_fresh = mean_and_sample_std(fresh_observations)
+    # Successful episodes only (see the module docstring).
+    mean_fresh, std_fresh = mean_and_sample_std(
+        [fresh for fresh, success in zip(fresh_observations, successes) if success]
+    )
 
     return {
         "policy_name": policy_name,
@@ -127,6 +138,7 @@ def summarize(episodes_csv):
         "std_fps": std_fps,
         "n_episodes_total": len(rows),
         "success_rate_percent": 100.0 * statistics.fmean(successes),
+        "n_episodes_success": int(sum(successes)),
         "mean_duration_s": mean_duration,
         "std_duration_s": std_duration,
         "mean_distance_traveled_m": mean_distance,
@@ -142,7 +154,7 @@ def write_summary(episodes_csv, summary):
 
     formatted = dict(summary)
     for field in OUTPUT_FIELDS:
-        if field not in {"policy_name", "n_episodes_total"}:
+        if field not in {"policy_name", "n_episodes_total", "n_episodes_success"}:
             formatted[field] = f"{summary[field]:.6f}"
 
     with temporary_path.open("w", newline="", encoding="utf-8") as handle:
@@ -176,7 +188,8 @@ def main():
         f"Policy={summary['policy_name']}  "
         f"episodes={summary['n_episodes_total']}  "
         f"success={summary['success_rate_percent']:.2f}%  "
-        f"mean_fps={summary['mean_fps']:.3f}"
+        f"mean_fps={summary['mean_fps']:.3f}  "
+        f"mean_fresh_obs(success only)={summary['mean_n_fresh_observations']:.1f}"
     )
 
 
